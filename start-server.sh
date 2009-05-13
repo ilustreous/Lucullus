@@ -10,6 +10,7 @@ echo "Shutting down server"
 kill `cat $path/paster.pid`
 
 echo "Starting new server deamon"
+paster setup-app development.ini
 paster serve --pid-file=$path/paster.pid --log-file=$path/paster.log $path/development.ini
 
 echo "Done!"
