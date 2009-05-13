@@ -54,6 +54,7 @@
 			var self = this
 			this.api = api
 			this.ns = ns
+			
 			this.root_node = $(this.ns)[0]
 			this.status_node = $(this.ns+'-status:first')
 			this.upload_node = $(this.ns+'-upload:first')
@@ -89,29 +90,19 @@
 		SeqGui.prototype.upload = function(file, format){
 			this.status('Starting Upload. File: '+file+' Format: '+format)
 
-		  // Prepare a textfile
+		  // Upload Textfile
 			var txt = this.api.create('TextResource')
-			if(txt.error) {
-				this.status('Error: '+txt.error.message)
-				return
-			}
+			txt.load({'uri':file})
 
-			// Upload textfile
-			txt.load({uri:file})
 			if(txt.error) {
 				this.status('Error: '+txt.error.message)
 				return
 			}
 			
 			this.status('Upload complete. Filesize: '+txt.result.size+' bytes')
-			// Create sequence container
+
+			// Parse textfile into sequence resource
 			var seq = this.api.create("SequenceResource")
-			if(seq.error) {
-				this.status('Server error: ' +seq.error.message)
-				return
-			}
-			
-			// Parse file
 			seq.load({'source':txt.id})
 			if(seq.error) {
 				this.status('Parser error: ' +seq.error.message)
@@ -123,27 +114,39 @@
 
 			// Create sequence view
 			var view = this.api.create("SequenceView")
-			if(view.error) {
-				this.status('Server error: ' +seq.error.message)
-				return
-			}
+			view.load({'source':this.sequence.id})
 			
-			// Load sequences into vier
-			view.load({'source':seq.id})
 			if(view.error) {
-				this.status('View error: ' +seq.error.message)
+				this.status('View error: ' +view.error.message)
 				return
 			}
 			
 			this.status('Rendering complete. Number of sequences: '+seq.result.len)
 			this.sequence_view = view
-			
+
 			var map = new Lucullus.PixelMap(this.map_nodes[5], function(numberx, numbery, sizex, sizey) {
 					return api.server + '/' + api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey	
 			})
 			this.table_node.show()
-			map.set_clipping(0,0,view.result['width'],view.result['height'])
+			map.set_clipping(0,0,this.sequence_view.width, this.sequence_view.height)
 			map.set_size($(this.map_nodes[5]).width(),$(this.map_nodes[5]).height()) 
+
+			// Create index view
+			var view2 = this.api.create("IndexView")
+			view2.load({'source':seq.id})
+			view2.set({'lineheight':this.sequence_view.fieldsize})
+			if(view2.error) {
+				this.status('View error: ' +view2.error.message)
+				return
+			}
+
+			this.index_view = view2
+
+			var map2 = new Lucullus.PixelMap(this.map_nodes[4], function(numberx, numbery, sizex, sizey) {
+					return api.server + '/' + api.session + '/' + view2.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey	
+			})
+			map2.set_clipping(0,0,this.index_view.width,this.index_view.height)
+			map2.set_size($(this.map_nodes[4]).width(),$(this.map_nodes[4]).height()) 
 			this.upload_node.hide()
 		}
 		

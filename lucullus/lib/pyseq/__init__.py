@@ -120,6 +120,10 @@ class BaseResource(object):
 		self.id = None
 		self.prepare()
 	
+	def status(self):
+		""" Shoueld return a dict with some infos about this resource """
+		return {}
+	
 	def prepare(self):
 		pass
 
@@ -140,7 +144,7 @@ import tempfile
 
 class TextResource(BaseResource):
 	def prepare(self):
-		self.data = None
+		self.data = ''
 		self.source = None
 
 	def api_load(self, uri):
@@ -158,6 +162,10 @@ class TextResource(BaseResource):
 			return {'size':len(self.get())}
 		else:
 			raise ResourceQueryError('Unsupported protocol or uri syntax: %s' % uri)
+
+	def status(self):
+		""" Shoueld return a dict with some infos about this resource """
+		return {'size':len(self.get())}
 
 	def get(self):
 		return self.data
@@ -178,11 +186,12 @@ class BaseView(BaseResource):
 	
 	def __init__(self, *l, **d):
 		super(BaseView, self).__init__(*l, **d)
-		self.size			= (0.0,0.0)			# Size (width,height) of the drawable area
+		self.size			= [0.0,0.0]		# Size (width,height) of the drawable area
 		self.selected		= (0.0,0.0,0.0,0.0)		# Offset of the rendering window
 
-	def getSize(self):
-		return (0.0,0.0)
+	def status(self):
+		""" Shoueld return a dict with some infos about this resource """
+		return {'width':self.size[0], 'height':self.size[1]}
 		
 	def select(self, x=0, y=0, width = 0, height = 0):
 		""" Selects an area within the real coordnates to render.
@@ -260,11 +269,17 @@ class IndexView(BaseView):
 		self.color = {}
 		self.color['fontcolor'] = hexcolor('#000000FF')
 
-	def api_load(self, **options):
-		self.source = options.get('rid')
-		self.offset = int(options.get('offset',0))
-		self.limit = int(options.get('limit',1024))
-		src = self.session.get(self.source)
+	def api_set(self, **options):
+		self.lineheight = int(options.get('lineheight', self.lineheight))
+		self.size[0] = max([len(i) for i in self.index] + [0]) * self.lineheight
+		self.size[1] = len(self.index) * self.lineheight
+
+
+	def api_load(self, source, offset=0, limit=1024):
+		self.source = source
+		self.offset = abs(int(offset))
+		self.limit = abs(int(limit))
+		src = self.session.get_resource(self.source)
 		try:
 			self.index = src.getIndex()
 		except AttributeError, e:
@@ -273,6 +288,9 @@ class IndexView(BaseView):
 			self.index = list(self.index)[self.offset:self.limit]
 		except IndexError:
 			raise pyseq.ResourceQueryError('Can not satisfy offset %d or limit %d' % (self.offset, self.limit))
+		
+		self.size[0] = max([len(i) for i in self.index] + [0]) * self.lineheight
+		self.size[1] = len(self.index) * self.lineheight
 		self.touch()
 		return {'items':len(self.index)}
 
@@ -283,7 +301,7 @@ class IndexView(BaseView):
 		#fo.set_hint_style(cairo.HINT_STYLE_NONE)
 		options.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
 		context.set_font_options(options)
-		context.set_font_size(self.lineheight - 2)
+		context.set_font_size(self.lineheight - 1)
 		return context.font_extents()
 
 	def draw(self, context, clipping):
@@ -292,7 +310,7 @@ class IndexView(BaseView):
 		w,h = cmaxx-cminx, cmaxy-cminy
 		c = context
 		lineheight = self.lineheight
-		fontsize = self.lineheight - 2
+		fontsize = self.lineheight - 1
 		color = self.color
 		index = self.index
 
@@ -301,12 +319,12 @@ class IndexView(BaseView):
 		real_lineheight = context.font_extents()[1]
 
 		# Rows to consider
-		row_first = int(math.floor( float(cminy) / fieldsize))
-		row_last  = int(math.ceil(  float(cmaxy) / fieldsize))
+		row_first = int(math.floor( float(cminy) / lineheight))
+		row_last  = int(math.ceil(  float(cmaxy) / lineheight))
 		row_last  = min(row_last, len(self.index))
 
 		# Fill the background with #ffffff
-		(r,g,b,a) = self.color.get('background',(0,0,0,1))
+		(r,g,b,a) = self.color.get('background',(1,1,1,1))
 		c.set_source_rgb(r, g, b)
 		c.rectangle(cminx, cminy, cmaxx-cminx, cmaxy-cminy)
 		c.fill()
@@ -322,7 +340,7 @@ class IndexView(BaseView):
 			#	c.fill()
 			#	c.set_source_rgb(0, 0, 0)
 			name = self.index[row]
-			y = self.fieldsize * row + self.fieldsize - font_extends[1]
+			y = lineheight * row + lineheight - font_extends[1]
 			x = 0
 			context.move_to(x, y)
 			context.show_text(name)

@@ -184,7 +184,7 @@ class ApiController(BaseController):
 		except Exception, e:
 			return jserror('Unhandled Exception %s' % e.__class__.__name__, detail=e.args)
 
-		return {'session': session.id, 'resource': resource.id, 'type':type(resource).__name__, 'methods':mets}
+		return {'session': session.id, 'resource': resource.id, 'type':type(resource).__name__, 'apis':mets, 'status':resource.status()}
 
 
 	@jsonify
@@ -235,7 +235,7 @@ class ApiController(BaseController):
 		
 		try:
 			result = c(**options)
-			return {"session":session.id, "resource":resource.id, "result":result}
+			return {"session":session.id, "resource":resource.id, "result":result, "status":resource.status()}
 		except pyseq.ResourceQueryError, e:
 			return jserror('Query failed: %s' % e.args)
 		except Exception, e:

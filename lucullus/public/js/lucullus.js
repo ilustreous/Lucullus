@@ -78,7 +78,7 @@ Lucullus.api.prototype.connect = function(callback) {
 }
 
 /**
- * Creating a new Resource and returns a resource object equipped with
+ * Creates a new Resource and returns a resource object equipped with
  * available api methods.
  * @param {string} type Type of the resource (one of api.plugins)
  * @param {function} Callback
@@ -92,9 +92,13 @@ Lucullus.api.prototype.create = function(type, callback) {
 			if(c.result && typeof c.result.resource !== 'undefined' && c.result.type) {
 			  resource.id = c.result.resource
 				resource.type = c.result.type
-				resource.result = c.result
-				if(c.result.methods) {
-					jQuery.each(c.result.methods, function(i, name) {
+				resource.lastcall = c
+				if(c.result.status) {
+					resource.result = c.result.status
+					resource.update(c.result.status)
+				}
+				if(c.result.apis) {
+					jQuery.each(c.result.apis, function(i, name) {
 						resource[name] = function(opt, callback2) {
 							return resource.query(name, opt, callback2)
 						}
@@ -122,26 +126,60 @@ Lucullus.resource = function(api) {
 	this.type = null
 	this.result = null
 	this.error = null
+	this.lastcall = null
 }
 
+/**
+ * Updates attributes without overwriting default attributes or functions.
+ * @param {object} dict Dictionary of new (or changed) attributes
+ * @return Resource object (self)
+ */
+Lucullus.resource.prototype.update = function(dict) {
+	var self = this
+	jQuery.each(dict, function(key, val) {
+		// Protect important attributes
+		if(-1 != jQuery.inArray(key, ['api','id','type','result','error','lastcall']))
+		  return
+		// Protect functions
+		if(typeof self[key] == 'function')
+		  return
+		// Set attribute
+		self[key] = val
+	});
+	return self
+}
+
+/**
+ * Runs a server resource api call and updates local attributes.
+ * Does nothing if this.error is true. Delete this.error to recover from errors.
+ * @param {string} action Action to call
+ * @param {object} parameter Dict of call parameters
+ * @param {function} Callback
+ * @return Resource object (self)
+ */
 Lucullus.resource.prototype.query = function(action, parameter, callback) {
 	var self = this
+	if(self.error) {
+		if(callback)
+		  callback(self)
+	  return self
+	}
 	var url = self.api.server + '/' + self.api.session + '/' + self.id + '/' + action
   var call = new Lucullus.call(self.api, url, parameter, 
 		function(c) {
-			if(c.result && typeof c.result.resource !== 'undefined' && c.result.resource == self.id && c.result.result) {
+			self.lastcall = c
+			if(c.result && typeof c.result.resource !== 'undefined' && c.result.resource == self.id && c.result.result && c.result.status) {
 			  self.result = c.result.result
-				// self.error = null
-				// error recovery should be explicit (r.error=null)
+				self.update(c.result.status)
 			} else {
 				self.error = c.error
 				self.result = null
 			}
 			if(callback)
-			  callback(c)
+			  callback(self)
 		}
 	);
-	return call
+	return self
 }
 
 
@@ -157,10 +195,6 @@ Lucullus.call = function(api, url, parameter, callback) {
 	this.callback = callback
 	this.result = null
 	this.error = null
-	this.send()
-}
-
-Lucullus.call.prototype.send = function() {
 	var self = this
 	jQuery.ajax({
 		url: self.url,

@@ -98,6 +98,16 @@ class SequenceView(pyseq.BaseView):
 		self.color['section2'] = pyseq.renderer.hexcolor('#EEEEEEFF')
 		self.color['section1'] = pyseq.renderer.hexcolor('#FFFFFFFF')
 
+	def status(self):
+		s = super(SequenceView, self).status()
+		s['fieldsize'] = self.fieldsize
+		s['rows'] = self.rows
+		s['columns'] = self.cols
+		s['offset'] = self.offset
+		s['limit'] = self.limit
+		return s
+
+
 	def api_load(self, source, offset=0, limit=1024, **options):
 		self.source = source
 		self.offset = abs(int(offset))
@@ -119,8 +129,9 @@ class SequenceView(pyseq.BaseView):
 			raise pyseq.ResourceQueryError('Can not satisfy offset %d or limit %d' % (self.offset, self.limit))
 		self.cols = max([len(d) for d in self.data])
 		self.rows = len(self.data)
+		self.size = (self.cols*self.fieldsize, self.rows*self.fieldsize)
 		self.touch()
-		return {'columns':self.cols, 'rows':self.rows, 'width':self.cols*self.fieldsize,'height':self.rows*self.fieldsize}
+		return {'columns':self.cols, 'rows':self.rows}
 
 	def api_position(self, **options):
 		col = abs(int(options.get('column',0)))
