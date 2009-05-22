@@ -1,13 +1,4 @@
 import logging
-
-from pylons import request, response, session, tmpl_context as c
-from pylons.controllers.util import abort, redirect_to
-from pylons.decorators import jsonify
-from pylons import config as app_config
-g = app_config['pylons.app_globals']
-
-from lucullus.lib.base import BaseController, template
-
 import random
 import hashlib
 import os, os.path
@@ -15,18 +6,22 @@ import urllib2
 import time
 import inspect
 
+from pylons import request, response, session, tmpl_context as c
+from pylons.controllers.util import abort, redirect_to
+from pylons.decorators import jsonify
+from pylons import config as app_config
+
+from lucullus.lib.base import BaseController, template
 from lucullus.lib import pyseq
 from lucullus.lib.pyseq import config
-
 import lucullus.lib.pyseq.plugin_seq
 import lucullus.lib.pyseq.plugin_phb
 
+g = app_config['pylons.app_globals']
 log = logging.getLogger(__name__)
-
 
 		
 """
-==========
 Server API
 ==========
 - Sessions sind Arbeitsumgebungen eines Benutzers und halten Infos zu belegten Ressourcen und deren Abhaengigkeiten
@@ -39,95 +34,8 @@ http://server.tld/api_path/[action]
 http://server.tld/api_path/[session]/[action]
 http://server.tld/api_path/[session]/[resource]/[action]
 
-Main:
-connect(key): Prepares a workdir and returns a session id and a list of plugins
-create(session, type): Creates a new (empty) resource of type $type and returns the resource id
-upload(session, url): Uploads a file as TextResource
-
-Resources:
-parse(session, rid, url, options): Imports a file into a resource
-set(session, rid, key, value): Changes the options of a resource 
-
-#export(session, resourceid[, format]): Exports a resource as text using an optional format
-#clone(session, resourceid): Clones a resource and returns the new resource id. The old id is still valid
-#query(session, resourceid, filter, *settings): Calls a resource method and returns the result and a resource id. A modifiing query returns a new resource id.
-#delete(session, resourceid): Deletes a resource
-
-Views:
-Views have unique IDs that are 
-view(session, view, *settings): Prepares a view, usually bound to one or more resources. Returns a unique view id and meta infos including dimension and offset. Calls with same settings should return same id and not create a new view.
-#render(session, viewid, x, y, w, h): Returns an Image (or a 301 redirect to an image) of size w,h and offset x,y
-
-Admin:
-list(password): Lists all sessions
-
-============
-Resource API
-============
-source:	URL or Pickle/Filename for the source of this resource
-
-import(source): Creates itself out of a source. Can be any python object
-export(format): Returns a String representation of itself.
-query_*(*settings): A query method directly callable by the api
-
-========
-Workflow
-========
-
-> session = connect()
-
-> r1 = session.create("TextResource")
-> r1.load(source="http://www.fasta.de/test.fasta")
-
-> r2 = session.create("SequenceResource")
-> r2.load(source=r1.id, format="fasta")
-
-> r3 = session.create("SequenceView")
-> r3.load(source=r2.id)
-
-> /[session.id]/[r3.id]/render(x, y, z, w, h, format="png")
-< image/png
-
-
-==============
-Implementation
-==============
-
-Sessions, Resources und Views sind an und fuer sich recht klein und picklebar.
-Halten sie groessere Datenstrukturen, werden diese ausgelagert.
-
-class Session(onject):
-	workdir = "/tmp/pyseq"
-	def __init__(self):
-		self.id = random
-		self.workdir = Session.workdir + '/' + self.id
-		self.resources = {}
-		self.views = {}
-		
-class Ressource(onject):
-	def __init__(self, session, source):
-		self.id = random
-		self.session = session
-		self.source = source
-		... do stuff
-		
-class View(object):
-	def __init__(self, session, **karks):
-		self.id = hash(kargs)
-		... do fucking stuff with kargs
-
 """
 
-
-
-
-
-cache = {}
-
-
-
-
-		
 def global_session_get(sid):
 	""" Returns session ans resource instances, if available """
 	session = g.sessions.get(sid,None)
@@ -137,14 +45,10 @@ def global_session_get(sid):
 def global_session_set(session):
 	""" Returns session ans resource instances, if available """
 	g.sessions[session.id] = session
-	
-
 
 def jserror(msg, **data):
 	data['error'] = msg
 	return data
-
-
 
 
 
@@ -161,6 +65,8 @@ class ApiController(BaseController):
 			return {'session': s.id, 'plugins':pyseq.plugins.keys()}
 		except IOError:
 			return jserror('Server error. Please try again later')
+
+
 
 	@jsonify
 	def create(self, sid):
@@ -185,6 +91,7 @@ class ApiController(BaseController):
 			return jserror('Unhandled Exception %s' % e.__class__.__name__, detail=e.args)
 
 		return {'session': session.id, 'resource': resource.id, 'type':type(resource).__name__, 'apis':mets, 'status':resource.status()}
+
 
 
 	@jsonify
@@ -242,6 +149,7 @@ class ApiController(BaseController):
 			return jserror('Query failed badly: %s' % e.args)
 
 
+
 	def export(self, sid, rid):
 		if not sid:
 			return abort(404, 'Session key missing.')
@@ -259,6 +167,7 @@ class ApiController(BaseController):
 
 		options = dict(request.params)
 		return resource.export(**options)
+
 
 
 	def render(self, sid, rid):

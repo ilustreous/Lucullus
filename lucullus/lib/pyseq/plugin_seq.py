@@ -1,9 +1,22 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""
+plugin_seq.py
+
+Created by Marcel Hellkamp on 2009-01-20.
+Copyright (c) 2008 Marcel Hellkamp. All rights reserved.
+"""
+
+import cairo
+import math
+import random
+import os
+import sys
+
 from lucullus.lib import pyseq
 from lucullus.lib.pyseq import renderer
 from lucullus.lib.pyseq import shapes
-
 from Bio import SeqIO, Seq, SeqRecord
-import cairo, math, random, os, sys
 
 
 

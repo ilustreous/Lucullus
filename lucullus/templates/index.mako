@@ -64,16 +64,6 @@
 			this.root = root
 			this.ml = new Lucullus.MoveListenerFactory()
 			
-			this.status_node = $('tr.status td.text:first', this.root)
-			this.upload_node = $('form.upload:first', this.root)
-			this.node_main = $('tr.main:first', this.root)
-			this.node_compare = $('tr.compare:first', this.root)
-			this.node_control = $('tr.control:first', this.root)
-			this.node_status = $('tr.status:first', this.root)
-			this.node_status_text = $('tr.status td.text:first', this.root)
-			this.node_main_map = $('tr.main td.map:first', this.root)
-			this.node_main_index = $('tr.main td.index:first', this.root)
-			
 			this.sequence = null
 			this.compare = null
 			
@@ -170,7 +160,6 @@
 			// Draw index view
 			var create_indexmap = function(c) {
 				if(iview.error) { self.status('View error: '+iview.error.message); return }
-				self.status('Index complete. Number of rows: '+iview.rows)
 				var node = $('tr.main td.index:first', this.root)
 				$('tr.main', this.root).show()
 				var map2 = new Lucullus.PixelMap(node, function(numberx, numbery, sizex, sizey) {
