@@ -17,14 +17,26 @@
 <body>
 	<div id="debug"></div>
 	<div id="seqgui">
-		<form class='upload'>
-			<div style="color: green">
-				Your Lucullus project is currently empty. Please provide an URL to a fasta file.
-			</div>
-		  URL: <input type="text" name="upUrl" />
-		  Format:<select>
-		    <option value="fasta">Fasta</option>
-		  </select> <input type="submit" value="Upload"/>
+		<form class='upload' style="background: lightgrey;
+									border: 5px solid grey;
+									position: absolute; top:50%; left:50%;
+									height:100px; width:400px; padding:14px;
+									margin:-65px -215px;
+									-moz-border-radius: 10px 10px;
+									overflow:hidden">
+			<div style="font-weight: bold; border-bottom: 1px solid grey; margin-bottom:5px">Upload a fasta File</div>
+			<label for="upUrl">URL:</label> <input type="text" name="upUrl" style="width: 50%" /> <input type="submit" value="Upload"/><br />
+			<label for="format">Format:</label>
+			<select name="format">
+		    	<option value="fasta">Fasta</option>
+			</select>
+			<select name="pack">
+		    	<option value="none">Not compressed</option>
+		    	<option value="gz">gzip</option>
+		    	<option value="rar">rar</option>
+		    	<option value="zip">zip</option>
+			</select>
+			<div style="color:red" class="status"></div>
 		</form>
 		<table class="guitable" style="width: 860px; height: 500px; margin: auto; border: 1px solid grey; border-spacing:0px; border-collapse:collapse">
 			<tr class="control" style="height:20px">
@@ -72,8 +84,6 @@
 			$('tr td', this.root).css('padding','0px')
 			$('tr.status', this.root).show()
 			
-			
-			
 			this.status('Preparing...')
 			
 			$('form.upload:first', this.root).bind('submit', function(event) {
@@ -116,7 +126,13 @@
 
 			// Parse the textfile
 			var parse_seq = function(c) {
-				if(txt.error) { self.status('Upload failed: '+txt.error.message); return }
+				if(txt.error) {
+					self.status('Upload failed: '+txt.error.message);
+					$('form.upload', this.root).css('border-color','red')
+					$('form.upload .status', this.root).html(txt.error.message)
+					return
+				}
+				$('form.upload', this.root).css('border-color','green')
 				self.status('Upload complete. Filesize: '+txt.size+' bytes')
 				seq.load({'source':txt.id})
 				seq.wait(load_into_views)
@@ -126,7 +142,6 @@
 			var load_into_views = function(c) {
 				if(seq.error) { self.status('Parser error: '+seq.error.message); return }
 				self.status('Parsing complete. Number of sequences: '+seq.len)
-				self.upload_node.hide()
 				self.sequence = seq
 				view.load({'source':seq.id})
 				iview.load({'source':seq.id})
@@ -139,6 +154,7 @@
 				self.status('Rendering complete. Number of sequences: '+seq.len)
 				var node = $('tr.main td.map:first', this.root)
 				$('tr.main', this.root).show()
+				$('form.upload', this.root).hide()
 				var map = new Lucullus.PixelMap(node, function(numberx, numbery, sizex, sizey) {
 						return self.api.server + '/' + self.api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
 				})
@@ -174,7 +190,7 @@
 
 		
 		
-		var autoload = jQuery.query.get('autoload')
+		var autoload = jQuery.query.get('upUrl')
 		var server = document.location.protocol + '//' + document.location.host + document.location.pathname + 'api'
 		var api
 		var gui
@@ -184,10 +200,10 @@
 			api = new Lucullus.api(server, "nokey")
 			gui = new SeqGui(api, '#seqgui')
 
-			api.connect()
-
-			if(autoload)
-			  gui.upload(autoload, 'fasta')
+			api.connect().wait(function(){
+				if(autoload)
+					gui.upload(autoload, 'fasta')
+			})
 		})
 	
 	</script>

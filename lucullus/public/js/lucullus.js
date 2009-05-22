@@ -78,6 +78,7 @@ Lucullus.api.prototype.connect = function(callback) {
 		}
 	})
 	c.wait(callback)
+	return c
 }
 
 /**
