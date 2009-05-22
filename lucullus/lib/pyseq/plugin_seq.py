@@ -15,6 +15,12 @@ class SequenceResource(pyseq.BaseResource):
 		self.source = None
 		self.format = None
 
+	def status(self):
+		s = super(SequenceResource, self).status()
+		s['len'] = self.len
+		s['width'] = self.width
+		return s
+
 	def api_load(self, source, format='fasta'):
 		self.source = source
 		self.format = format

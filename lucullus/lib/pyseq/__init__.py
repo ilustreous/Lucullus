@@ -269,6 +269,11 @@ class IndexView(BaseView):
 		self.color = {}
 		self.color['fontcolor'] = hexcolor('#000000FF')
 
+	def status(self):
+		s = super(IndexView, self).status()
+		s['rows'] = len(self.index)
+		return s
+
 	def api_set(self, **options):
 		self.lineheight = int(options.get('lineheight', self.lineheight))
 		self.size[0] = max([len(i) for i in self.index] + [0]) * self.lineheight

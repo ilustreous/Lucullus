@@ -89,65 +89,56 @@
 		
 		SeqGui.prototype.upload = function(file, format){
 			this.status('Starting Upload. File: '+file+' Format: '+format)
-
-		  // Upload Textfile
+			var self = this
+			// Request resources
 			var txt = this.api.create('TextResource')
-			txt.load({'uri':file})
+			var seq = this.api.create('SequenceResource')
+			var view = this.api.create('SequenceView')
+			var iview = this.api.create("IndexView")
+			//var rview = this.api.create("RulerView")
 
-			if(txt.error) {
-				this.status('Error: '+txt.error.message)
-				return
-			}
-			
-			this.status('Upload complete. Filesize: '+txt.result.size+' bytes')
-
-			// Parse textfile into sequence resource
-			var seq = this.api.create("SequenceResource")
-			seq.load({'source':txt.id})
-			if(seq.error) {
-				this.status('Parser error: ' +seq.error.message)
-				return
-			}
-
-			this.status('Parsing complete. Number of sequences: '+seq.result.len)
-			this.sequence = seq
-
-			// Create sequence view
-			var view = this.api.create("SequenceView")
-			view.load({'source':this.sequence.id})
-			
-			if(view.error) {
-				this.status('View error: ' +view.error.message)
-				return
-			}
-			
-			this.status('Rendering complete. Number of sequences: '+seq.result.len)
-			this.sequence_view = view
-
-			var map = new Lucullus.PixelMap(this.map_nodes[5], function(numberx, numbery, sizex, sizey) {
-					return api.server + '/' + api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey	
+			Lucullus.wait([txt,seq,view,iview], function() {
+				if(txt.error) { self.status('Creation of text Buffer failed'); return }
+				if(seq.error) { self.status('Creation of sequence Buffer failed'); return }
+				if(view.error) { self.status('Creation of image Buffer failed'); return }
+				if(iview.error) { self.status('Creation of index Buffer failed'); return }
+				//if(rview.error) { self.status('Creation of ruler Buffer failed'); return }
+				txt.load({'uri':file})
+				txt.wait(function() {
+					if(txt.error) { self.status('Upload failed'); return }
+					self.status('Upload complete. Filesize: '+txt.size+' bytes')
+					seq.load({'source':txt.id})
+					seq.wait(function() {
+						if(seq.error) { self.status('Parser error: '+seq.error.message); return }
+						self.status('Parsing complete. Number of sequences: '+seq.len)
+						self.upload_node.hide()
+						self.sequence = seq
+						view.load({'source':seq.id})
+						iview.load({'source':seq.id})
+						view.wait(function(){
+							if(view.error) { self.status('View error: '+view.error.message); return }
+							self.status('Rendering complete. Number of sequences: '+seq.len)
+							var map = new Lucullus.PixelMap(self.map_nodes[5], function(numberx, numbery, sizex, sizey) {
+									return self.api.server + '/' + self.api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
+							})
+							self.table_node.show()
+							map.set_clipping(0,0,view.width, view.height)
+							map.set_size($(self.map_nodes[5]).width(),$(self.map_nodes[5]).height())
+							self.api.test = iview
+							iview.set({'lineheight':view.fieldsize})
+							iview.wait(function() {
+								if(iview.error) { self.status('View error: '+iview.error.message); return }
+								self.status('Index complete. Number of rows: '+iview.rows)
+								var map2 = new Lucullus.PixelMap(self.map_nodes[4], function(numberx, numbery, sizex, sizey) {
+										return self.api.server + '/' + self.api.session + '/' + iview.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
+								})
+								map2.set_clipping(0,0,iview.width,iview.height)
+								map2.set_size($(self.map_nodes[4]).width(),$(self.map_nodes[4]).height())
+							})
+						})
+					})
+				})
 			})
-			this.table_node.show()
-			map.set_clipping(0,0,this.sequence_view.width, this.sequence_view.height)
-			map.set_size($(this.map_nodes[5]).width(),$(this.map_nodes[5]).height()) 
-
-			// Create index view
-			var view2 = this.api.create("IndexView")
-			view2.load({'source':seq.id})
-			view2.set({'lineheight':this.sequence_view.fieldsize})
-			if(view2.error) {
-				this.status('View error: ' +view2.error.message)
-				return
-			}
-
-			this.index_view = view2
-
-			var map2 = new Lucullus.PixelMap(this.map_nodes[4], function(numberx, numbery, sizex, sizey) {
-					return api.server + '/' + api.session + '/' + view2.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey	
-			})
-			map2.set_clipping(0,0,this.index_view.width,this.index_view.height)
-			map2.set_size($(this.map_nodes[4]).width(),$(this.map_nodes[4]).height()) 
-			this.upload_node.hide()
 		}
 		
 

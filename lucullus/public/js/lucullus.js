@@ -22,7 +22,6 @@ Lucullus.api = function (server, key) {
 	/** List of supported plugins 
 	 * @type List */
 	this.plugins  = []
-
 	/** Log for errors and debug messages 
 	 * @type Array */
 	this.log		= []
@@ -40,10 +39,10 @@ Lucullus.api = function (server, key) {
  * @param {string} Name of the API method
  * @param {string} Data to provide
  * @param {function} Callback
- * @return Lucutus.call object
+ * @return Lucutus.call object with $this attached to $call.api
  */
 
-Lucullus.api.prototype.call = function(action, input, callback) {
+Lucullus.api.prototype.query = function(action, input, callback) {
 	var self = this
 	var url = self.server + '/'
 	
@@ -52,7 +51,11 @@ Lucullus.api.prototype.call = function(action, input, callback) {
 	}
 
 	url = url + action
-  return new Lucullus.call(self, url, input, callback)
+ 	var c = new Lucullus.Call()
+	c.api = this
+	c.run(url, input, callback)
+	self.log.push(c)
+	return c
 }
 
 /**
@@ -64,17 +67,17 @@ Lucullus.api.prototype.connect = function(callback) {
 	this.session = ''
 	this.plugins = []
 
-	return this.call( 'connect', 
-		{'key':this.key}, 
-		function(c) {
-			if(c.result && c.result.session)
-				c.api.session = c.result.session
-			if(c.result && c.result.plugins)
-				c.api.plugins = c.result.plugins
-			if(callback)
-			  callback(c)
+	var c = this.query( 'connect', {'key':this.key});
+	c.wait(function(c) {
+		if(c.result && typeof c.result.session == 'string')
+			c.api.session = c.result.session
+		if(c.result && typeof c.result.plugins == 'object')
+			c.api.plugins = c.result.plugins
+		if(c.error) {
+			this.log.push(c.error)
 		}
-	);
+	})
+	c.wait(callback)
 }
 
 /**
@@ -82,35 +85,17 @@ Lucullus.api.prototype.connect = function(callback) {
  * available api methods.
  * @param {string} type Type of the resource (one of api.plugins)
  * @param {function} Callback
- * @return Resource object
+ * @return Lucullus.Resource object
  */
 Lucullus.api.prototype.create = function(type, callback) {
-  var resource = new Lucullus.resource(this)
-	var result = this.call( 'create', 
-		{'type':type}, 
-		function(c) {
-			if(c.result && typeof c.result.resource !== 'undefined' && c.result.type) {
-			  resource.id = c.result.resource
-				resource.type = c.result.type
-				resource.lastcall = c
-				if(c.result.status) {
-					resource.result = c.result.status
-					resource.update(c.result.status)
-				}
-				if(c.result.apis) {
-					jQuery.each(c.result.apis, function(i, name) {
-						resource[name] = function(opt, callback2) {
-							return resource.query(name, opt, callback2)
-						}
-					});
-				}
-				c.api.resources[resource.id] = resource
-			}
-			if(callback)
-			  callback(c)
+	var r = new Lucullus.Resource(this, type)
+	r.wait(function(c) {
+		if(! c.resource.error) {
+			c.api.resources[c.resource.id] = c.resource
 		}
-	);
-	return resource
+	})
+
+	return r
 }
 
 
@@ -120,21 +105,214 @@ Lucullus.api.prototype.create = function(type, callback) {
 
 
 
-Lucullus.resource = function(api) {
-	this.api = api
-	this.id	= null
-	this.type = null
+
+
+
+/**
+ * Waits for one or many callbacks or resources to complete
+ * @param {object} calls List of call or resource objects
+ * @param {function} Callback
+ */
+Lucullus.wait = function (o, callback) {
+	var count = o.length
+	while(o.length) {
+		var c = o.shift()
+		c.wait(function(ca) {
+			count = count - 1
+			if(!count) {
+				callback(ca)
+			}
+		})
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * Handles a single ajax request.
+ * @param {Lucullus.Api} api Api object to use
+ * @param {strng} url URL to call (null to delay request. See Call.run())
+ * @param {object} parameter Dict of POST parameters
+ * @param {function} callback Function to call when finished (using the call object as parameter)
+ * @return Call object (self)
+ */
+Lucullus.Call = function(url, parameter, callback, notnow) {
+	this.url = null
+	this.parameter = null
+	this.callbacks = []
+
+	this.started = false
+	this.done = false
+
 	this.result = null
 	this.error = null
-	this.lastcall = null
+
+	this.run(url, parameter, callback, notnow)
 }
 
 /**
- * Updates attributes without overwriting default attributes or functions.
+ * Starts the request 
+ * @param {strng} url URL to call (optional, overwrites initial url)
+ * @param {object} parameter Dict of POST parameters  (optional, overwrites initial parameter)
+ * @param {function} callback Function to call when finished (using the call object as parameter)
+ * @return Call object (self)
+ */
+
+Lucullus.Call.prototype.run = function(url, parameter, callback, notnow) {
+	if(this.started || this.done)
+		return this
+	if(typeof url === 'string')
+		this.url = url
+	if(typeof parameter === 'object')
+		this.parameter = parameter
+	if(typeof callback === 'function')
+		this.wait(callback)
+
+	if(this.url && ! notnow) {
+		this.started = true
+		var self = this
+		jQuery.ajax({
+			url: self.url,
+			data: self.parameter,
+			dataType: "json",
+			success: function(data){
+				if(data && data.session) {
+					self.result = data
+				} else if(data && data.error) {
+					self.fail(data.error, data)
+				} else if(data) {
+					self.fail('Unexpected answer', {'answer':data})
+				} else {
+					self.fail('No answer')
+				}
+			},
+			complete: function() {
+				self.done = true
+				self.wait()
+			}
+		});
+	}
+	return this
+}
+
+Lucullus.Call.prototype.fail = function(message, data) {
+	if(this.done)
+		return
+	if(typeof data !== 'object')
+		data = {'data':data}
+	this.error = data
+	this.error['message'] = message
+	this.done = true
+	this.wait()
+}
+
+/**
+ * Runs a callback as soon as the call is finished.
+ * Callbacks are executed in-order. 
+ * @param {function} callback Function to call (using the call object as parameter)
+ * @return Call object (self)
+ */
+Lucullus.Call.prototype.wait = function(callback) {
+	if(callback && typeof callback === 'function')
+	  this.callbacks.push(callback)
+	if(this.done) {
+		while(this.callbacks.length) {
+			var c = this.callbacks.shift()
+			c(this)
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+  new Resource() tries to create a new resource
+  r.query() returns call objects bount to that resource
+  
+*/
+
+
+
+
+/**
+ * Creates a server resource of a specific type.
+ * @param {Lucullus.Api} api Session to use
+ * @param {string} type Name of the resource classto create
+ */
+Lucullus.Resource = function(api, type) {
+	this.api = api
+	this.id	= null
+	this.type = type
+	this.error = null
+	this.queue = []
+	this.current = null
+	var self = this
+	
+	// Request resource on server
+	var call = this.api.query( 'create', {'type':type})
+	this.current = call
+	call.resource = this
+	//c.api = this.api // Done in api.call()
+
+	// Configure self and bind a functin for every 'apis' name
+	call.wait(function(c) {
+		if(c.result) {
+			if(typeof c.result.resource === 'string' || typeof c.result.resource === 'number') {
+				c.resource.id = c.result.resource
+				if(typeof c.result.status === 'object')
+					c.resource.update(c.result.status)
+				if(typeof c.result.apis === 'object') {
+					jQuery.each(c.result.apis, function(i, name) {
+						if(typeof c.resource[name] === 'undefined') {
+							c.resource[name] = function(opt, callback2) {
+								return this.query(name, opt, callback2)
+							}
+						}
+					});
+				}
+			} else {
+				c.resource.error = c.result
+				c.resource.error['message'] = "No resource ID! Initialisation failed?"
+			}
+		} else {
+			c.resource.error = c.error
+		}
+	})
+}
+
+/**
+ * Used to update attributes without overwriting default attributes or functions.
  * @param {object} dict Dictionary of new (or changed) attributes
  * @return Resource object (self)
  */
-Lucullus.resource.prototype.update = function(dict) {
+Lucullus.Resource.prototype.update = function(dict) {
 	var self = this
 	jQuery.each(dict, function(key, val) {
 		// Protect important attributes
@@ -150,77 +328,64 @@ Lucullus.resource.prototype.update = function(dict) {
 }
 
 /**
+ * Runs a callback as soon as the latest api call is finished.
+ * Callbacks are executed in-order.
+ * @param {function} callback Function to call (using the call object as parameter)
+ * @return Call object (self)
+ */
+Lucullus.Resource.prototype.wait = function(callback) {
+	if(typeof callback == 'function') {
+		this.current.wait(callback)
+	}
+}
+
+
+/**
  * Runs a server resource api call and updates local attributes.
  * Does nothing if this.error is true. Delete this.error to recover from errors.
  * @param {string} action Action to call
  * @param {object} parameter Dict of call parameters
  * @param {function} Callback
- * @return Resource object (self)
+ * @return Call object with $this attached to $call.resource ad $this.api attached to $call.api
  */
-Lucullus.resource.prototype.query = function(action, parameter, callback) {
+Lucullus.Resource.prototype.query = function(action, parameter, callback) {
 	var self = this
-	if(self.error) {
-		if(callback)
-		  callback(self)
-	  return self
-	}
-	var url = self.api.server + '/' + self.api.session + '/' + self.id + '/' + action
-  var call = new Lucullus.call(self.api, url, parameter, 
-		function(c) {
-			self.lastcall = c
-			if(c.result && typeof c.result.resource !== 'undefined' && c.result.resource == self.id && c.result.result && c.result.status) {
-			  self.result = c.result.result
-				self.update(c.result.status)
+	var url = this.api.server + '/' + this.api.session + '/' + this.id + '/' + action
+	var call = new Lucullus.Call(url, parameter, callback, true)
+	call.api = this.api
+	call.resource = this
+	call.wait(function(c) {
+		if(c.result) {
+			if(typeof c.result.resource !== 'undefined' && c.result.resource == c.resource.id && c.result.status) {
+				c.resource.update(c.result.status)
 			} else {
-				self.error = c.error
-				self.result = null
+				c.resource.error = c.result
+				c.resource.error['message'] = "Resource ID mismatch!"
 			}
-			if(callback)
-			  callback(self)
+		} else {
+			c.resource.error = c.error
 		}
-	);
-	return self
+	})
+
+	/* Calls are limitet to one call per resource at a time, so we use the wait() queue of the last call to start the current call */
+	this.queue.push(call)
+	var old = self.current
+	self.current = call
+
+	old.wait(function() {
+		var next = self.queue.shift()
+		if(next) {
+			next.run()
+		}
+	})
+
+	return call
 }
 
 
 
 
 
-
-
-Lucullus.call = function(api, url, parameter, callback) {
-	this.api = api
-	this.url = url
-	this.parameter = parameter
-	this.callback = callback
-	this.result = null
-	this.error = null
-	var self = this
-	jQuery.ajax({
-		url: self.url,
-		data: self.parameter,
-		dataType: "json",
-		async: false,
-		success: function(data){
-			if(data && data.session) {
-				self.result = data
-			} else if(data && data.error) {
-				self.error = data
-				self.error['message'] = data.error
-				delete self.error['error']
-			} else if(data) {
-				self.error = {'message':'Unexpected answer', 'answer':data}
-			} else {
-				self.error = {'error':'No answer'}
-			}
-		},
-		complete: function() {
-			if(self.callback) {
-				self.callback(self)
-			}
-		}
-	});
-}
 
 
 
@@ -537,68 +702,5 @@ Lucullus.MoveListenerFactory = function() {
 
 
 
-
-
-/**
- * Used for UserInteraction
- * @constructor
- */
-Lucullus.BaseGui = function(element, api) {
-	this.api   = api
-	this.node  = $(element)
-	this.map   = null
-	this.ml = new Lucullus.MoveListenerFactory()
-
-	var self   = this
-
-	self.api.addHook("connectStart", function(msg, d) {
-		self.node.html("Connecting to "+self.api.server+"...")
-	})
-
-	self.api.addHook("connectSuccess", function(msg, d) {
-		self.node.html("Connecting to to "+self.api.server+" with session key "+d.output.session+". Creating project...")
-		self.api.create('sequences')
-	})
-
-	self.api.addHook("importStart", function(msg, d) {
-		self.node.html("Importing "+d.input.uri+"...")
-	})
-	
-	self.api.addHook("importSuccess", function(msg, d) {
-		if(self.map) {
-			self.ml.removeMap(self.map)
-			self.map = null
-		}
-
-		self.api.call('getsize',{'view':'default'}, function(data) {
-			var x = Number(data.x)
-			var y = Number(data.y)
-			var w = Number(data.width)
-			var h = Number(data.height)
-			
-			self.map = new Lucullus.PixelMap(self.node, function(numberx, numbery, sizex, sizey) {
-				return self.api.server + '/image?view=alignment&session='+self.api.session+'&x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey	
-			})
-			
-			self.map.set_clipping(x,y,x+w,y+h)
-			self.ml.addMap(self.map,1,1)
-			self.ml.addLinear(mapnode,1,1)
-			return true
-		})
-
-	})
-
-	self.api.addHook("connectError", function(msg, d) {
-		self.node.html("Connection failed... Please try again later.")
-	})
-
-	self.api.addHook("createError", function(msg, d) {
-		self.node.html("Failed to create a new project. Please try again later.")
-	})
-
-	self.api.addHook("importError", function(msg, d) {
-		self.node.html("Failed to import data: "+ d.output.error)
-	})
-}
 
 
