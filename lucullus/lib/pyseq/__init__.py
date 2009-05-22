@@ -338,7 +338,7 @@ class IndexView(BaseView):
 		c.set_source_rgba(r, g, b, a)
 		font_extends = context.font_extents()
 
-		for row in range(row_first, row_last+1):
+		for row in range(row_first, row_last):
 			#if row % 2:
 			#	c.set_source_rgb(0.95, 0.95, 0.95)
 			#	c.rectangle(0, 0, vw, self.fieldsize)
