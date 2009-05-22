@@ -17,6 +17,7 @@
 <body>
 	<div id="debug"></div>
 	<div id="seqgui">
+		<div id="seqgui-status" style="border: 1px solid grey">Please activate JavaScript.</div>
 		<form id='seqgui-upload'>
 			<div style="color: green">
 				Your Lucullus project is currently empty. Please provide an URL to a fasta file.
@@ -40,7 +41,6 @@
 				<td></td>
 			</tr>
 		</table>
-		<div id="seqgui-status" style="border: 1px solid grey">Please activate JavaScript.</div>
   </div>
 	<div style="width: 850px; margin: 10px auto">
 		<a onclick="$('#help').toggle()">Help (show/hide)</a>
@@ -97,48 +97,66 @@
 			var iview = this.api.create("IndexView")
 			//var rview = this.api.create("RulerView")
 
-			Lucullus.wait([txt,seq,view,iview], function() {
+			// The following code blocks have do be called (and completed) in order.
+			// To do this, we /could/ use nested wait() blocks. But thats ugly.
+			
+			// Upload the textfile
+			var upload_txt = function(c) {
 				if(txt.error) { self.status('Creation of text Buffer failed'); return }
 				if(seq.error) { self.status('Creation of sequence Buffer failed'); return }
 				if(view.error) { self.status('Creation of image Buffer failed'); return }
 				if(iview.error) { self.status('Creation of index Buffer failed'); return }
-				//if(rview.error) { self.status('Creation of ruler Buffer failed'); return }
 				txt.load({'uri':file})
-				txt.wait(function() {
-					if(txt.error) { self.status('Upload failed'); return }
-					self.status('Upload complete. Filesize: '+txt.size+' bytes')
-					seq.load({'source':txt.id})
-					seq.wait(function() {
-						if(seq.error) { self.status('Parser error: '+seq.error.message); return }
-						self.status('Parsing complete. Number of sequences: '+seq.len)
-						self.upload_node.hide()
-						self.sequence = seq
-						view.load({'source':seq.id})
-						iview.load({'source':seq.id})
-						view.wait(function(){
-							if(view.error) { self.status('View error: '+view.error.message); return }
-							self.status('Rendering complete. Number of sequences: '+seq.len)
-							var map = new Lucullus.PixelMap(self.map_nodes[5], function(numberx, numbery, sizex, sizey) {
-									return self.api.server + '/' + self.api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
-							})
-							self.table_node.show()
-							map.set_clipping(0,0,view.width, view.height)
-							map.set_size($(self.map_nodes[5]).width(),$(self.map_nodes[5]).height())
-							self.api.test = iview
-							iview.set({'lineheight':view.fieldsize})
-							iview.wait(function() {
-								if(iview.error) { self.status('View error: '+iview.error.message); return }
-								self.status('Index complete. Number of rows: '+iview.rows)
-								var map2 = new Lucullus.PixelMap(self.map_nodes[4], function(numberx, numbery, sizex, sizey) {
-										return self.api.server + '/' + self.api.session + '/' + iview.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
-								})
-								map2.set_clipping(0,0,iview.width,iview.height)
-								map2.set_size($(self.map_nodes[4]).width(),$(self.map_nodes[4]).height())
-							})
-						})
-					})
+				txt.wait(parse_seq)
+			}
+
+			// Parse the textfile
+			var parse_seq = function(c) {
+				if(txt.error) { self.status('Upload failed: '+txt.error.message); return }
+				self.status('Upload complete. Filesize: '+txt.size+' bytes')
+				seq.load({'source':txt.id})
+				seq.wait(load_into_views)
+			}
+
+			// Load sequences into views
+			var load_into_views = function(c) {
+				if(seq.error) { self.status('Parser error: '+seq.error.message); return }
+				self.status('Parsing complete. Number of sequences: '+seq.len)
+				self.upload_node.hide()
+				self.sequence = seq
+				view.load({'source':seq.id})
+				iview.load({'source':seq.id})
+				view.wait(create_seqmap)
+				self.table_node.show()
+			}
+
+			// Draw sequence map and configure index view
+			var create_seqmap = function(c) {
+				if(view.error) { self.status('View error: '+view.error.message); return }
+				self.status('Rendering complete. Number of sequences: '+seq.len)
+				var map = new Lucullus.PixelMap(self.map_nodes[5], function(numberx, numbery, sizex, sizey) {
+						return self.api.server + '/' + self.api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
 				})
-			})
+				map.set_clipping(0,0,view.width, view.height)
+				map.set_size($(self.map_nodes[5]).width(),$(self.map_nodes[5]).height())
+				self.api.test = iview
+				iview.set({'lineheight':view.fieldsize})
+				iview.wait(create_indexmap)
+			}
+
+			// Draw index view
+			var create_indexmap = function(c) {
+				if(iview.error) { self.status('View error: '+iview.error.message); return }
+				self.status('Index complete. Number of rows: '+iview.rows)
+				var map2 = new Lucullus.PixelMap(self.map_nodes[4], function(numberx, numbery, sizex, sizey) {
+						return self.api.server + '/' + self.api.session + '/' + iview.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
+				})
+				map2.set_clipping(0,0,iview.width,iview.height)
+				map2.set_size($(self.map_nodes[4]).width(),$(self.map_nodes[4]).height())
+			}
+
+			// Wait for resource creation and start it all!
+			Lucullus.wait([txt,seq,view,iview], upload_txt)
 		}
 		
 

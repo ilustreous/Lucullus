@@ -328,12 +328,13 @@ Lucullus.Resource.prototype.update = function(dict) {
 }
 
 /**
- * Runs a callback as soon as the latest api call is finished.
+ * Waits for all current calls to finish
  * Callbacks are executed in-order.
  * @param {function} callback Function to call (using the call object as parameter)
  * @return Call object (self)
  */
 Lucullus.Resource.prototype.wait = function(callback) {
+	
 	if(typeof callback == 'function') {
 		this.current.wait(callback)
 	}
@@ -367,7 +368,7 @@ Lucullus.Resource.prototype.query = function(action, parameter, callback) {
 		}
 	})
 
-	/* Calls are limitet to one call per resource at a time, so we use the wait() queue of the last call to start the current call */
+	/* Calls are limited to one call per resource at a time, so we use the wait() queue of the last call to start the current call */
 	this.queue.push(call)
 	var old = self.current
 	self.current = call

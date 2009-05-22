@@ -227,17 +227,17 @@ class ApiController(BaseController):
 		available = set(available)
 		missing = requied - provided
 		if missing:
-			return jserror('Query failed. Missing arguments: %s' % ','.join(missing))
+			return jserror('Missing arguments: %s' % ','.join(missing))
 		unknown = provided - available
 		if unknown and not twostar:
-			return jserror('Query failed. Unknown arguments: %s' % ','.join(unknown))
+			return jserror('Unknown arguments: %s' % ','.join(unknown))
 		print requied, missing, unknown
 		
 		try:
 			result = c(**options)
 			return {"session":session.id, "resource":resource.id, "result":result, "status":resource.status()}
 		except pyseq.ResourceQueryError, e:
-			return jserror('Query failed: %s' % e.args)
+			return jserror('%s' % e.args[0])
 		except Exception, e:
 			return jserror('Query failed badly: %s' % e.args)
 
