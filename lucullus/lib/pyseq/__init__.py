@@ -326,7 +326,7 @@ class IndexView(BaseView):
 		# Rows to consider
 		row_first = int(math.floor( float(cminy) / lineheight))
 		row_last  = int(math.ceil(  float(cmaxy) / lineheight))
-		row_last  = min(row_last, len(self.index))
+		row_last  = min(row_last, len(self.index)-1)
 
 		# Fill the background with #ffffff
 		(r,g,b,a) = self.color.get('background',(1,1,1,1))
@@ -338,7 +338,7 @@ class IndexView(BaseView):
 		c.set_source_rgba(r, g, b, a)
 		font_extends = context.font_extents()
 
-		for row in range(row_first, row_last):
+		for row in range(row_first, row_last+1):
 			#if row % 2:
 			#	c.set_source_rgb(0.95, 0.95, 0.95)
 			#	c.rectangle(0, 0, vw, self.fieldsize)

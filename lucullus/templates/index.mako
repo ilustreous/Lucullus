@@ -17,8 +17,7 @@
 <body>
 	<div id="debug"></div>
 	<div id="seqgui">
-		<div id="seqgui-status" style="border: 1px solid grey">Please activate JavaScript.</div>
-		<form id='seqgui-upload'>
+		<form class='upload'>
 			<div style="color: green">
 				Your Lucullus project is currently empty. Please provide an URL to a fasta file.
 			</div>
@@ -27,40 +26,41 @@
 		    <option value="fasta">Fasta</option>
 		  </select> <input type="submit" value="Upload"/>
 		</form>
-		<table id="seqgui-table" style="width: 860px; height: 500px; margin: auto; border: 1px solid grey">
-			<tr style="height:20px">
-				<td style="width:100px"></td>
-				<td></td>
+		<table class="guitable" style="width: 860px; height: 500px; margin: auto; border: 1px solid grey; border-spacing:0px; border-collapse:collapse">
+			<tr class="control" style="height:20px">
+				<td class="logo"></td>
+				<td class="ruler"></td>
 			</tr>
-			<tr style="height:14px">
-				<td></td>
-				<td></td>
+			<tr class="compare" style="height:14px">
+				<td class="index"></td>
+				<td class="map"></td>
 			</tr>
-			<tr>
-				<td></td>
-				<td></td>
+			<tr class="main">
+				<td class="index" style="width:100px"></td>
+				<td class="map"></td>
+			</tr>
+			<tr class="status" style="height:20px">
+				<td colspan='2' class="text" style="border: 1px solid grey">Please activate JavaScript.</td>
 			</tr>
 		</table>
   </div>
-	<div style="width: 850px; margin: 10px auto">
-		<a onclick="$('#help').toggle()">Help (show/hide)</a>
-		<div style="display: none; background-color: #ffffee; padding: 15px" id="help">
-			
-		</div>
-	</div>
 	<script type="text/javascript">
 	  /*<![CDATA[*/
-		function SeqGui(api, ns) {
+		function SeqGui(api, root) {
 			var self = this
 			this.api = api
-			this.ns = ns
+			this.root = root
 			this.ml = new Lucullus.MoveListenerFactory()
 			
-			this.root_node = $(this.ns)[0]
-			this.status_node = $(this.ns+'-status:first')
-			this.upload_node = $(this.ns+'-upload:first')
-			this.table_node = $(this.ns+'-table:first')
-			this.map_nodes = $(this.ns+'-table td')
+			this.status_node = $('tr.status td.text:first', this.root)
+			this.upload_node = $('form.upload:first', this.root)
+			this.node_main = $('tr.main:first', this.root)
+			this.node_compare = $('tr.compare:first', this.root)
+			this.node_control = $('tr.control:first', this.root)
+			this.node_status = $('tr.status:first', this.root)
+			this.node_status_text = $('tr.status td.text:first', this.root)
+			this.node_main_map = $('tr.main td.map:first', this.root)
+			this.node_main_index = $('tr.main td.index:first', this.root)
 			
 			this.sequence = null
 			this.compare = null
@@ -68,12 +68,15 @@
 			this.sequence_view = null
 			this.compare_view = null
 			
-			this.status_node.show()
-			this.upload_node.show()
-			this.table_node.hide()
+			$('tr', this.root).hide()
+			$('tr td', this.root).css('padding','0px')
+			$('tr.status', this.root).show()
+			
+			
+			
 			this.status('Preparing...')
 			
-			this.upload_node.bind('submit', function(event) {
+			$('form.upload:first', this.root).bind('submit', function(event) {
 				event.preventDefault()
 				event.stopPropagation()
 				var file = $('input:first',event.target).val()
@@ -85,7 +88,7 @@
 		}
 		
 		SeqGui.prototype.status = function(txt) {
-			this.status_node.html(txt)
+			$('tr.status td.text:first', this.root).html(txt)
 		}
 		
 		SeqGui.prototype.upload = function(file, format){
@@ -128,20 +131,21 @@
 				view.load({'source':seq.id})
 				iview.load({'source':seq.id})
 				view.wait(create_seqmap)
-				self.table_node.show()
 			}
 
 			// Draw sequence map and configure index view
 			var create_seqmap = function(c) {
 				if(view.error) { self.status('View error: '+view.error.message); return }
 				self.status('Rendering complete. Number of sequences: '+seq.len)
-				var map = new Lucullus.PixelMap(self.map_nodes[5], function(numberx, numbery, sizex, sizey) {
+				var node = $('tr.main td.map:first', this.root)
+				$('tr.main', this.root).show()
+				var map = new Lucullus.PixelMap(node, function(numberx, numbery, sizex, sizey) {
 						return self.api.server + '/' + self.api.session + '/' + view.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
 				})
 				map.set_clipping(0,0,view.width, view.height)
-				map.set_size($(self.map_nodes[5]).width(),$(self.map_nodes[5]).height())
+				map.set_size(node.width(),node.height())
 				self.ml.addMap(map,1,1)
-				self.ml.addLinear(self.map_nodes[5],1,1)
+				self.ml.addLinear(node,1,1)
 				self.api.test = iview
 				iview.set({'lineheight':view.fieldsize})
 				iview.wait(create_indexmap)
@@ -151,13 +155,15 @@
 			var create_indexmap = function(c) {
 				if(iview.error) { self.status('View error: '+iview.error.message); return }
 				self.status('Index complete. Number of rows: '+iview.rows)
-				var map2 = new Lucullus.PixelMap(self.map_nodes[4], function(numberx, numbery, sizex, sizey) {
+				var node = $('tr.main td.index:first', this.root)
+				$('tr.main', this.root).show()
+				var map2 = new Lucullus.PixelMap(node, function(numberx, numbery, sizex, sizey) {
 						return self.api.server + '/' + self.api.session + '/' + iview.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
 				})
 				map2.set_clipping(0,0,iview.width,iview.height)
-				map2.set_size($(self.map_nodes[4]).width(),$(self.map_nodes[4]).height())
+				map2.set_size(node.width(),node.height())
 				self.ml.addMap(map2,0,1)
-				self.ml.addLinear(self.map_nodes[4],0,1)
+				self.ml.addLinear(node,0,1)
 
 			}
 
