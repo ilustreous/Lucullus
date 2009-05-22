@@ -54,6 +54,7 @@
 			var self = this
 			this.api = api
 			this.ns = ns
+			this.ml = new Lucullus.MoveListenerFactory()
 			
 			this.root_node = $(this.ns)[0]
 			this.status_node = $(this.ns+'-status:first')
@@ -139,6 +140,8 @@
 				})
 				map.set_clipping(0,0,view.width, view.height)
 				map.set_size($(self.map_nodes[5]).width(),$(self.map_nodes[5]).height())
+				self.ml.addMap(map,1,1)
+				self.ml.addLinear(self.map_nodes[5],1,1)
 				self.api.test = iview
 				iview.set({'lineheight':view.fieldsize})
 				iview.wait(create_indexmap)
@@ -153,6 +156,9 @@
 				})
 				map2.set_clipping(0,0,iview.width,iview.height)
 				map2.set_size($(self.map_nodes[4]).width(),$(self.map_nodes[4]).height())
+				self.ml.addMap(map2,0,1)
+				self.ml.addLinear(self.map_nodes[4],0,1)
+
 			}
 
 			// Wait for resource creation and start it all!
