@@ -15,7 +15,7 @@ from lucullus.lib.base import BaseController, template
 from lucullus.lib import pyseq
 from lucullus.lib.pyseq import config
 import lucullus.lib.pyseq.plugin_seq
-import lucullus.lib.pyseq.plugin_phb
+#import lucullus.lib.pyseq.plugin_phb
 
 g = app_config['pylons.app_globals']
 log = logging.getLogger(__name__)
