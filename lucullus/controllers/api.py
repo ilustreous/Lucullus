@@ -5,6 +5,7 @@ import os, os.path
 import urllib2
 import time
 import inspect
+import cairo
 
 from pylons import request, response, session, tmpl_context as c
 from pylons.controllers.util import abort, redirect_to
@@ -37,7 +38,7 @@ http://server.tld/api_path/[session]/[resource]/[action]
 """
 
 def global_session_get(sid):
-	""" Returns session ans resource instances, if available """
+	""" Returns session and resource instances, if available """
 	session = g.sessions.get(sid,None)
 	session.touch(False)
 	return session
@@ -56,6 +57,20 @@ def jserror(msg, **data):
 
 
 class ApiController(BaseController):
+
+	def __before__(self, *k, **o):
+		self.session = None
+		self.resource = None
+		self.sid = o.get('sid', request.params.get("sid", None))
+		self.rid = o.get('rid', request.params.get("rid", None))
+		
+		if self.sid != None:
+			self.session = g.sessions.get(self.sid,None)
+			if self.session:
+				self.session.touch(False)
+				if self.rid != None:
+					self.resource = self.session.get_resource(self.rid)
+
 	@jsonify
 	def connect(self):
 		""" Creates a new session and returns a session id"""
@@ -69,64 +84,49 @@ class ApiController(BaseController):
 
 
 	@jsonify
-	def create(self, sid):
+	def create(self):
 		""" Creates a new (empty) resource. """
-		
-		if not sid:
-			return jserror('Session key missing.')
-
-		session = global_session_get(sid)
-		if not session:
-			return jserror('Session expired or invalid. Create a new session first.')
-
 		format = request.params.get("type", None)
+		name = request.params.get("name", None)
+		
 		if not format or format not in pyseq.plugins:
 			return jserror('Resource type not available.', plugins=pyseq.plugins.keys())
 
+		if not self.session:
+			return jserror('Session expired or invalid. Create a new session first.')
+
 		try:
 			cls = pyseq.plugins[format]
-			resource = session.new_resource(cls)
+			resource = self.session.new_resource(cls, name)
 			mets = [a[4:] for a in dir(resource) if a.startswith('api_') and callable(getattr(resource, a))]
+			log.debug("Created resource %s for session %s", resource.id, self.session.id)
 		except Exception, e:
 			return jserror('Unhandled Exception %s' % e.__class__.__name__, detail=e.args)
 
-		return {'session': session.id, 'resource': resource.id, 'type':type(resource).__name__, 'apis':mets, 'status':resource.status()}
+		return {'session': self.session.id, 'resource': resource.id, 'type':type(resource).__name__, 'apis':mets, 'status':resource.status()}
 
 
 
 	@jsonify
-	def query(self, sid, rid, query):
+	def query(self, query):
 		""" Accesses the resource configuration and functions """
-		if not sid:
-			return jserror('Session key missing.')
-
-		session = global_session_get(sid)
-		if not session:
+		if not self.session:
 			return jserror('Session expired or invalid. Create a new session first.')
 
-		if not rid:
-			return jserror('Key missing: resource')
-
-		resource = session.get_resource(rid)
-		if not resource:
-			return jserror('Unknown resource %s for session %s' % (rid, sid))
-
-		action = query
-		if not action:
-			return jserror('Key missing: action')
+		if not self.resource:
+			return jserror('Unknown resource "%s" for session "%s"' % (self.rid, self.sid))
 
 		options = dict(request.params)
 
 		try:
-			c = getattr(resource, "api_" + action)
+			c = self.resource.getApiMethod(query)
 		except (AttributeError), e:
-			return jserror('Resource does not implement %s()' % action)
+			return jserror('Resource does not implement %s()' % query)
 		
 		# Parameter testing
 		provided = set(options.keys())
 		available, onestar, twostar, defaults = inspect.getargspec(c)
 		available.remove('self')
-		print inspect.getargspec(c)
 		if not defaults:
 			requied = set(available)
 		else:
@@ -138,11 +138,10 @@ class ApiController(BaseController):
 		unknown = provided - available
 		if unknown and not twostar:
 			return jserror('Unknown arguments: %s' % ','.join(unknown))
-		print requied, missing, unknown
 		
 		try:
 			result = c(**options)
-			return {"session":session.id, "resource":resource.id, "result":result, "status":resource.status()}
+			return {"session":self.session.id, "resource":self.resource.id, "result":result, "status":self.resource.status()}
 		except pyseq.ResourceQueryError, e:
 			return jserror('%s' % e.args[0])
 		except Exception, e:
@@ -150,62 +149,41 @@ class ApiController(BaseController):
 
 
 
-	def export(self, sid, rid):
-		if not sid:
-			return abort(404, 'Session key missing.')
-
-		session = global_session_get(sid)
-		if not session:
-			return abort(404, 'Session expired or invalid. Create a new session first.')
-
-		if not rid:
-			return abort(404, 'Key missing: resource')
-
-		resource = session.get_resource(rid)
-		if not resource:
-			return abort(404, 'Unknown resource %s for session %s' % (rid, sid))
+	def export(self):
+		if not self.resource:
+			if not self.session:
+				return abort(404, 'Session expired or invalid. Create a new session first.')
+			else:
+				return abort(404, 'Unknown resource %s for session %s' % (rid, sid))
 
 		options = dict(request.params)
-		return resource.export(**options)
+		return self.resource.export(**options)
 
 
 
 	def render(self, sid, rid):
-		import StringIO
 		import rfc822
 
-		if not sid:
-			return abort(404, 'Session key missing.')
+		if not self.resource:
+			if not self.session:
+				return abort(404, 'Session expired or invalid. Create a new session first.')
+			else:
+				return abort(404, 'Unknown resource %s for session %s' % (rid, sid))
 
-		session = global_session_get(sid)
-		if not session:
-			return abort(404, 'Session expired or invalid. Create a new session first.')
-
-		if not rid:
-			return abort(404, 'Key missing: resource')
-
-		resource = session.get_resource(rid)
-		if not resource:
-			return abort(404, 'Unknown resource %s for session %s' % (rid, sid))
-
-		if not isinstance(resource, pyseq.BaseView):
+		if not isinstance(self.resource, pyseq.BaseView):
 			return abort(500, "This resource has no visuals")
 		
 		x = request.params.get("x",0)
 		y = request.params.get("y",0)
-		z = request.params.get("z",0)
 		w = request.params.get("w",256)
 		h = request.params.get("h",256)
 		f = request.params.get("f",'png')
+		mode = request.params.get("mode",'RGB24')
 
 		try:
-			x,y,z,w,h = map(int, (x,y,z,w,h))
+			x,y,w,h = map(int, (x,y,w,h))
 		except:
 			return abort(500, "Cannot parse input parameters. Use numeric values for x,y,z,w and h")
-
-		formats = ('png','jpg')
-		if f not in formats:
-			return abort(500, "Unknown image format. Use one of: %s" % ', '.join(formats))
 
 		if x < 0 or y < 0:
 			return abort(500, "Negative position.")
@@ -213,22 +191,52 @@ class ApiController(BaseController):
 		if w < 16 or h < 16 or w > 1024 or h > 1024:
 			return abort(500, "Image size to big or to small")
 
-		response.headers['Content-Type'] = "image/%s" % f
-		response.headers['X-Copyright'] = "Marcel Hellkamp"			
-		response.headers['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
+		if f not in ('png'):
+			abort(500, "Image format not supported.")
+			
+		if mode not in ('ARGB32', 'RGB24'):
+			return abort(500, "Image mode not supported")
 
-		try:
-			filename = session.workpath + '/image_%d.mtime%d.x%d.y%d.z%d.w%d.h%d.%s' % (resource.id,int(resource.mtime),x,y,z,w,h,f)
+		# Send cached file to client
+		filename = self.session.workpath + '/image_%s.mtime%d.x%d.y%d.w%d.h%d.%s.%s' % (self.resource.id,int(self.resource.mtime),x,y,w,h,mode,f)
+
+		if not os.path.exists(filename) or config.debug:
+			# Image not cached. Render new one
 			try:
-				if config.debug:
-					os.unlink(filename)
-				return open(filename)
-			except (IOError, OSError):
-				f = open(filename, "wb")
-				resource.select(x, y, w+z, h+z)
-				resource.render(f, w, h)
-				f.close()
-				return open(filename)
-		except (IOError,OSError):
-			return abort(500, "Server file system error. Please try again later")
+				io = open(filename, "wb")
+			except (IOError,OSError):
+				log.error("Could not create cache image file %s", filename)
+				return abort(500, "Server file system error. Please try again later")
+
+			if "ARGB32" == mode:
+				surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+			else:
+				surface = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+
+			context = cairo.Context(surface)
+			context.translate(-x, -y)
+			try:
+				self.resource.render(context, x, y, w, h)
+			except Exception, e:
+				log.exception("Bad render call")
+				return abort(500, "Rendering failed.")
+
+			if format == 'png':
+				surface.write_to_png(io)
+			else:
+				surface.write_to_png(io)
+			io.close()
+		
+		response.headers['Content-Type'] = "image/%s" % f
+		response.headers['X-Copyright'] = "Max Planck Institut (MPIBPC Goettingen) Marcel Hellkamp"
+		response.headers['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
+		return open(filename)
+
+
+
+
+
+
+
+
 

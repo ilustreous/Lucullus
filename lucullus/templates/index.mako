@@ -95,10 +95,10 @@
 			this.status('Starting Upload. File: '+file+' Format: '+format)
 			var self = this
 			// Request resources
-			var txt = this.api.create('TextResource')
-			var seq = this.api.create('SequenceResource')
-			var view = this.api.create('SequenceView')
-			var iview = this.api.create("IndexView")
+			var txt = this.api.create('TextResource','tr')
+			var seq = this.api.create('SequenceResource','seq')
+			var view = this.api.create('SequenceView','sev')
+			var iview = this.api.create("IndexView",'iv')
 			//var rview = this.api.create("RulerView")
 
 			// The following code blocks have do be called (and completed) in order.

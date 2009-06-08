@@ -88,8 +88,8 @@ Lucullus.api.prototype.connect = function(callback) {
  * @param {function} Callback
  * @return Lucullus.Resource object
  */
-Lucullus.api.prototype.create = function(type, callback) {
-	var r = new Lucullus.Resource(this, type)
+Lucullus.api.prototype.create = function(type, name, callback) {
+	var r = new Lucullus.Resource(this, type, name)
 	r.wait(function(c) {
 		if(! c.resource.error) {
 			c.api.resources[c.resource.id] = c.resource
@@ -267,9 +267,9 @@ Lucullus.Call.prototype.wait = function(callback) {
  * @param {Lucullus.Api} api Session to use
  * @param {string} type Name of the resource classto create
  */
-Lucullus.Resource = function(api, type) {
+Lucullus.Resource = function(api, type, name) {
 	this.api = api
-	this.id	= null
+	this.id	= name
 	this.type = type
 	this.error = null
 	this.queue = []
@@ -277,7 +277,10 @@ Lucullus.Resource = function(api, type) {
 	var self = this
 	
 	// Request resource on server
-	var call = this.api.query( 'create', {'type':type})
+	if(name)
+	  var call = this.api.query( 'create', {'type':type, 'name':name})
+	else
+	  var call = this.api.query( 'create', {'type':type})
 	this.current = call
 	call.resource = this
 	//c.api = this.api // Done in api.call()

@@ -54,7 +54,7 @@ class Session(object):
 		self.workpath = None
 		self.filename = None
 
-		self.resources = []
+		self.resources = {}
 		self.ctime = time.time()
 		self.mtime = time.time()
 		self.atime = time.time()
@@ -80,23 +80,27 @@ class Session(object):
 			self.mtime = time.time()
 		self.atime = time.time()
 
-	def new_resource(self, cls):
+	def new_resource(self, cls, name = None):
 		""" Creates a new Resource in this session """
 		if not isinstance(cls, type):
 			raise AttributeError('Cannot create a resource from an object.')
 		if not issubclass(cls, BaseResource):
 			raise AttributeError('All resources must implement BaseResource.')
 
+		c = 0
+		while not name or name in self.resources:
+			c += 1
+			name = 'tmp%d' % c
+		name = str(name)
 		resource = cls(self)
-		self.resources.append(resource)
+		resource.id = name
+		self.resources[name] = resource
 		self.touch()
-
-		resource.id = self.resources.index(resource)
 		return resource
 
 	def get_resource(self, id):
 		try:
-			return self.resources[int(id)]
+			return self.resources[str(id)]
 		except:
 			return None
 
@@ -131,6 +135,8 @@ class BaseResource(object):
 	def export(self):
 		return ''
 
+	def getApiMethod(self, name):
+		return getattr(self, "api_" + name)
 
 
 
@@ -179,55 +185,21 @@ class BaseView(BaseResource):
 	
 	def __init__(self, *l, **d):
 		super(BaseView, self).__init__(*l, **d)
-		self.size			= [0.0,0.0]		# Size (width,height) of the drawable area
-		self.selected		= (0.0,0.0,0.0,0.0)		# Offset of the rendering window
 
-	def status(self):
-		""" Shoueld return a dict with some infos about this resource """
-		return {'width':self.size[0], 'height':self.size[1]}
+	def size(self):
+		""" Should return the absolute size of the drawable area in pixel. """
+		return (0,0)
 		
-	def select(self, x=0, y=0, width = 0, height = 0):
-		""" Selects an area within the real coordnates to render.
-			x, y = offset
-			width, height = size of the area. Skip to scale 1 to 1"""
-		self.selected = (int(x), int(y), abs(int(width)), abs(int(height)))
-	
-	def viewport(self, x, y, width=255, height=255, relative=False):
-		""" Veraltet """
-		self.select(x, y, width, height)
+	def status(self):
+		w, h = self.size()
+		return {'width':w, 'height':h}
+		
+	def offset(self):
+		""" Should return the (x,y) offset of the drawable area in pixel. """
+		return (0,0)
 
-	def render(self, io, width = 0, height = 0, format = 'png', mode='ARGB32'):
-		""" Renders the (selected area of the) image into a Stream using $format and $mode and scaling down to $width and $height """
-		width = abs(int(width))
-		height = abs(int(height))
-		sx, sy, sw, sh = self.selected
-		# If target width is missing, use width of selected area or the whole drawable image. 
-		width = width or sw or (self.size[0]-sx)
-		height = height or sw or (self.size[1]-sy)
-		# If no scaling is selected, draw 1 to 1
-		sw = sw or width
-		sh = sh or height
-
-		if "ARGB32" == mode:
-			surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
-		elif "RGB24" == mode:
-			surface = cairo.ImageSurface(cairo.FORMAT_RGB24, width, height)
-		else:
-			raise NotImplementedError
-			
-		context = cairo.Context(surface)
-		context.scale(width/sw, height/sh)
-		context.translate(-sx, -sy)
-		self.draw(context, clipping=(sx, sy, sw+sx, sh+sy))
-		if format == 'png':
-			surface.write_to_png(io)
-		else:
-			raise NotImplementedError
-
-	def draw(self, context, clipping):
-		''' Draws into a cairo context using real coordinates (do not scale or translate) and clipping '''
-		pass
-
+	def render(self, context, x=0, y=0, width=0, height=0):
+		""" Renders the selected area of the data into a cairo context. """
 
 
 
@@ -243,6 +215,11 @@ class IndexView(BaseView):
 		self.color = {}
 		self.color['fontcolor'] = hexcolor('#000000FF')
 
+	def size(self):
+		w = max([len(i) for i in self.index] + [0]) * self.lineheight
+		h = len(self.index) * self.lineheight
+		return (w,h)
+
 	def status(self):
 		s = super(IndexView, self).status()
 		s['rows'] = len(self.index)
@@ -250,9 +227,6 @@ class IndexView(BaseView):
 
 	def api_set(self, **options):
 		self.lineheight = int(options.get('lineheight', self.lineheight))
-		self.size[0] = max([len(i) for i in self.index] + [0]) * self.lineheight
-		self.size[1] = len(self.index) * self.lineheight
-
 
 	def api_load(self, source, offset=0, limit=1024):
 		self.source = source
@@ -268,8 +242,6 @@ class IndexView(BaseView):
 		except IndexError:
 			raise pyseq.ResourceQueryError('Can not satisfy offset %d or limit %d' % (self.offset, self.limit))
 		
-		self.size[0] = max([len(i) for i in self.index] + [0]) * self.lineheight
-		self.size[1] = len(self.index) * self.lineheight
 		self.touch()
 		return {'items':len(self.index)}
 
@@ -283,10 +255,9 @@ class IndexView(BaseView):
 		context.set_font_size(self.lineheight - 1)
 		return context.font_extents()
 
-	def draw(self, context, clipping):
+	def render(self, context, x, y, w, h):
 		# Shortcuts
-		cminx, cminy, cmaxx, cmaxy = clipping
-		w,h = cmaxx-cminx, cmaxy-cminy
+		cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
 		c = context
 		lineheight = self.lineheight
 		fontsize = self.lineheight - 1

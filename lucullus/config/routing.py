@@ -25,6 +25,9 @@ def make_map():
     map.connect('/api/{sid}/{rid}/export', controller='api', action="export")
     map.connect('/api/{sid}/{rid}/{query}', controller='api', action="query")
 
+    map.connect('/img/{sid}/{rid}/{x}/{y}/{z}/{w}/{h}/....{format}', controller='api', action="render")
+
+
     #map.connect('/{controller}/', action="index")
     #map.connect('/{controller}/{action}')
     #map.connect('/{controller}/{action}/{id}')

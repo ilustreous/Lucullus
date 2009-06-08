@@ -117,6 +117,9 @@ class SequenceView(pyseq.BaseView):
 		self.color['section2'] = pyseq.renderer.hexcolor('#EEEEEEFF')
 		self.color['section1'] = pyseq.renderer.hexcolor('#FFFFFFFF')
 
+	def size(self):
+		return (self.cols*self.fieldsize, self.rows*self.fieldsize)
+		
 	def status(self):
 		s = super(SequenceView, self).status()
 		s['fieldsize'] = self.fieldsize
@@ -125,7 +128,6 @@ class SequenceView(pyseq.BaseView):
 		s['offset'] = self.offset
 		s['limit'] = self.limit
 		return s
-
 
 	def api_load(self, source, offset=0, limit=1024, **options):
 		self.source = source
@@ -148,7 +150,6 @@ class SequenceView(pyseq.BaseView):
 			raise pyseq.ResourceQueryError('Can not satisfy offset %d or limit %d' % (self.offset, self.limit))
 		self.cols = max([len(d) for d in self.data])
 		self.rows = len(self.data)
-		self.size = (self.cols*self.fieldsize, self.rows*self.fieldsize)
 		self.touch()
 		return {'columns':self.cols, 'rows':self.rows}
 
@@ -156,7 +157,6 @@ class SequenceView(pyseq.BaseView):
 		col = abs(int(options.get('column',0)))
 		row = abs(int(options.get('row',0)))
 		return {"x":self.fieldsize * col, "y":self.fieldsize * row}
-
 
 	def setfontoptions(self, context):
 		context.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
@@ -168,10 +168,9 @@ class SequenceView(pyseq.BaseView):
 		context.set_font_size(self.fieldsize - 1)
 		return context.font_extents()
 		
-	def draw(self, context, clipping):
+	def render(self, context, x, y, w, h):
 		# Shortcuts
-		cminx, cminy, cmaxx, cmaxy = clipping
-		w,h = cmaxx-cminx, cmaxy-cminy
+		cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
 		c = context
 		fieldsize = self.fieldsize
 		fontsize = self.fieldsize - 1
