@@ -192,7 +192,8 @@ class BaseView(BaseResource):
 		
 	def status(self):
 		w, h = self.size()
-		return {'width':w, 'height':h}
+		ox, oy = self.offset()
+		return {'width':w, 'height':h, 'offset':[ox, oy], 'size':[w, h]}
 		
 	def offset(self):
 		""" Should return the (x,y) offset of the drawable area in pixel. """
@@ -210,8 +211,6 @@ class IndexView(BaseView):
 		self.lineheight = options.get('lineheight',12)
 		self.index = []
 		self.source = None
-		self.offset = 0
-		self.limit = 1024
 		self.color = {}
 		self.color['fontcolor'] = hexcolor('#000000FF')
 
@@ -230,18 +229,12 @@ class IndexView(BaseView):
 
 	def api_load(self, source, offset=0, limit=1024):
 		self.source = source
-		self.offset = abs(int(offset))
-		self.limit = abs(int(limit))
 		src = self.session.get_resource(self.source)
 		try:
 			self.index = src.getIndex()
 		except AttributeError, e:
 			raise pyseq.ResourceQueryError('Can not load index. %s.getIndex() not found' % src.__class__.__name__)
-		try:
-			self.index = list(self.index)[self.offset:self.limit]
-		except IndexError:
-			raise pyseq.ResourceQueryError('Can not satisfy offset %d or limit %d' % (self.offset, self.limit))
-		
+		self.index = list(self.index)
 		self.touch()
 		return {'items':len(self.index)}
 
@@ -298,10 +291,117 @@ class IndexView(BaseView):
 		return self
 
 
+class RulerView(BaseView):
+	def prepare(self):
+		self.step       = 14
+		self.marks      = 1
+		self.digits     = 10
+		self.fontsize   = 12
+		self.skip       = 0
+		self.color = {}
+		self.color['fontcolor'] = hexcolor('#000000FF')
 
+	def api_set(self, **options):
+		self.step       = int(options.get('step', self.step))
+		self.marks      = int(options.get('marks', self.marks))
+		self.digits     = int(options.get('digits', self.digits))
+		self.skip       = int(options.get('skip', self.skip))
+		self.fontsize   = int(options.get('fontsize', self.fontsize))
+
+	def size(self):
+		return (2**16, self.fontsize + 5)
+		
+	def offset(self):
+		return (-2**15 + self.skip,0)
+
+	def render(self, context, x, y, w, h):
+		cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
+		c = context
+
+		first = x - x % self.step
+		last = x+w + (x+w) % self.step
+		c.set_source_rgb(1, 1, 1)
+		c.paint()
+
+		fo = cairo.FontOptions()
+		fo.set_hint_metrics(cairo.HINT_METRICS_ON)
+		fo.set_hint_style(cairo.HINT_STYLE_NONE)
+		fo.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
+		c.set_font_options(fo)
+		c.set_font_size(self.fontsize)
+		font_extends = context.font_extents()
+		
+		c.set_source_rgb(0, 0, 0)
+		for mark in xrange(first - self.step*self.digits, last + self.step*self.digits, self.step):
+			if (mark % (self.step * self.digits)) == 0:
+				name = str(mark / self.step)
+				text_width, text_height = c.text_extents(name)[2:4]
+				c.move_to(mark - text_width/2, font_extends[3])
+				c.show_text(name)
+
+		for mark in xrange(first, last, self.step):
+			if (mark % (self.step * self.marks)) == 0:
+				c.rectangle(mark,font_extends[3]+4,1,h)
+			if (mark % (self.step * self.digits)) == 0:
+				c.rectangle(mark,font_extends[3]+2,2,h)
+			c.fill()
+
+			
+		return self
+
+		"""
+		# Rows to consider
+		row_first = int(math.floor( float(vy-ay)	/ fieldsize))
+		row_last  = int(math.ceil(	float(vy-ay+vh) / fieldsize))
+		col_first = int(math.floor( float(vx-ax)	/ fieldsize))
+		col_last  = int(math.ceil(	float(vx-ax+vw) / fieldsize))
+
+		# To prevent cutting numbers at the view border, we have to look bejond the borders
+		col_last	+= 10 - col_last % 10 + 1
+		col_first	-= col_first % 10 + 1
+
+
+		# Font settings
+		c.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+		fo = cairo.FontOptions()
+		fo.set_hint_metrics(cairo.HINT_METRICS_ON)
+		fo.set_hint_style(cairo.HINT_STYLE_NONE)
+		fo.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
+		c.set_font_options(fo)
+		if not self.fontsize:
+			fsize = sum(c.font_extents()[0:2])
+			fsize = float(fieldsize) * 0.75 * (fieldsize / fsize)
+			self.fontsize = fsize
+		c.set_font_size(self.fontsize)
+		c.set_source_rgb(0, 0, 0)
+		font_extends = context.font_extents()
+
+		for i in range(col_first,col_last):
+			# Draw marks
+			x = i * fieldsize + fieldsize/2
+			if (i % 5) == 0:
+				c.rectangle(x,20-5,1,ah)
+			elif (i % 10) == 0:
+				c.rectangle(x-1,20-5,3,ah)
+			else:
+				c.rectangle(x,20-2,1,ah)
+			c.fill()
+
+			# Draw Numbers			
+			if (i % 10) == 0:
+				name = str(i)
+				text_width, text_height = c.text_extents(name)[2:4]
+				x = i * fieldsize + fieldsize/2 - text_width/2
+				y = 20 - font_extends[1] - 5
+				c.move_to(x, y)
+				c.show_text(name)
+
+		return self
+		"""
 
 
 
 # Register common Plugins
 register_plugin("IndexView", IndexView)
+register_plugin("RulerView", RulerView)
 register_plugin("TextResource", TextResource)

@@ -185,9 +185,6 @@ class ApiController(BaseController):
 		except:
 			return abort(500, "Cannot parse input parameters. Use numeric values for x,y,z,w and h")
 
-		if x < 0 or y < 0:
-			return abort(500, "Negative position.")
-
 		if w < 16 or h < 16 or w > 1024 or h > 1024:
 			return abort(500, "Image size to big or to small")
 

@@ -88,8 +88,6 @@ class SequenceView(pyseq.BaseView):
 		self.cols = 0
 		self.rows = 0
 		self.source = None
-		self.offset = 0
-		self.limit = 1024
 		self.color = {}
 		self.color['*'] = pyseq.renderer.hexcolor('#000000FF')
 		self.color['-'] = pyseq.renderer.hexcolor('#999999FF')
@@ -125,15 +123,10 @@ class SequenceView(pyseq.BaseView):
 		s['fieldsize'] = self.fieldsize
 		s['rows'] = self.rows
 		s['columns'] = self.cols
-		s['offset'] = self.offset
-		s['limit'] = self.limit
 		return s
 
-	def api_load(self, source, offset=0, limit=1024, **options):
-		self.source = source
-		self.offset = abs(int(offset))
-		self.limit = abs(int(limit))
-		self.fieldsize = options.get('fieldsize', self.fieldsize)
+	def api_set(self, **options):
+		self.fieldsize = int(options.get('fieldsize', self.fieldsize))
 		for key in options:
 			if key.startswith('color-'):
 				try:
@@ -141,13 +134,12 @@ class SequenceView(pyseq.BaseView):
 				except AttributeError:
 					pass
 
+	def api_load(self, source, **options):
+		self.source = source
 		seq = self.session.get_resource(self.source)
 		if not isinstance(seq, SequenceResource):
 			raise pyseq.ResourceQueryError('Can not load resources other than SequenceResource')
-		try:
-			self.data = list(seq.getData())[self.offset:self.limit]
-		except IndexError:
-			raise pyseq.ResourceQueryError('Can not satisfy offset %d or limit %d' % (self.offset, self.limit))
+		self.data = list(seq.getData())
 		self.cols = max([len(d) for d in self.data])
 		self.rows = len(self.data)
 		self.touch()

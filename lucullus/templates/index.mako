@@ -99,6 +99,7 @@
 			var seq = this.api.create('SequenceResource','seq')
 			var view = this.api.create('SequenceView','sev')
 			var iview = this.api.create("IndexView",'iv')
+			var rview = this.api.create("RulerView",'rv')
 			//var rview = this.api.create("RulerView")
 
 			// The following code blocks have do be called (and completed) in order.
@@ -110,6 +111,7 @@
 				if(seq.error) { self.status('Creation of sequence Buffer failed'); return }
 				if(view.error) { self.status('Creation of image Buffer failed'); return }
 				if(iview.error) { self.status('Creation of index Buffer failed'); return }
+				if(rview.error) { self.status('Creation of index Buffer failed'); return }
 				txt.load({'uri':file})
 				txt.wait(parse_seq)
 			}
@@ -134,8 +136,13 @@
 				self.status('Parsing complete. Number of sequences: '+seq.len)
 				self.sequence = seq
 				view.load({'source':seq.id})
+				view.set({'fieldsize': 14})
 				iview.load({'source':seq.id})
+				iview.set({'lineheight': 14})
+				rview.set({'step': 14})
 				view.wait(create_seqmap)
+				iview.wait(create_indexmap)
+				Lucullus.wait([view,rview], create_rulermap)
 			}
 
 			// Draw sequence map and configure index view
@@ -153,8 +160,6 @@
 				self.ml.addMap(map,1,1)
 				self.ml.addLinear(node,1,1)
 				self.api.test = iview
-				iview.set({'lineheight':view.fieldsize})
-				iview.wait(create_indexmap)
 			}
 
 			// Draw index view
@@ -169,11 +174,24 @@
 				map2.set_size(node.width(),node.height())
 				self.ml.addMap(map2,0,1)
 				self.ml.addLinear(node,0,1)
+			}
 
+			// Draw ruler view
+			var create_rulermap = function(c) {
+				if(rview.error) { self.status('View error: '+rview.error.message); return }
+				var node = $('tr.control td.ruler:first', this.root)
+				$('tr.control', this.root).show()
+				var map3 = new Lucullus.PixelMap(node, function(numberx, numbery, sizex, sizey) {
+						return self.api.server + '/' + self.api.session + '/' + rview.id + '/render?x='+(numberx*sizex)+'&y='+(numbery*sizey)+'&w='+sizex+'&h='+sizey
+				})
+				map3.set_clipping(view.offset[0],rview.offset[1],view.width+view.offset[0],rview.height+rview.offset[1])
+				map3.set_size(node.width(),node.height())
+				self.ml.addMap(map3,1,0)
+				self.ml.addLinear(node,1,0)
 			}
 
 			// Wait for resource creation and start it all!
-			Lucullus.wait([txt,seq,view,iview], upload_txt)
+			Lucullus.wait([txt,seq,view,iview, rview], upload_txt)
 		}
 		
 
