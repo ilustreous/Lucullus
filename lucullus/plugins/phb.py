@@ -7,6 +7,56 @@ from Bio import SeqIO, Seq, SeqRecord
 import sys
 import re
 
+class TreeResource(pyseq.BaseResource):
+	def prepare(self):
+		self.tree	= None
+		self.source = None
+		self.format = None
+		self.nodes  = 0
+		
+	def status(self):
+		s = super(SequenceResource, self).status()
+		s['nodes'] = self.nodes
+		return s
+
+	def api_load(self, source, format='phb'):
+		self.source = source
+		self.format = format
+		text = self.session.get_resource(self.source)
+		if not isinstance(text, pyseq.TextResource):
+			raise pyseq.ResourceQueryError('Can not load resources other than TextResource')
+	
+		data = text.getIO()
+		self.tree = NewickTree(None)
+	
+		try:
+			self.tree.parse(data)
+		except Exception, e:
+			raise pyseq.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
+		if not self.tree.nodes():
+			raise pyseq.ResourceQueryError('No data found.')
+
+		self.nodes = len(self.tree.nodes())
+		self.touch()
+		return {"nodes":self.nodes}
+
+	def api_index(self, **options):
+		return {"len":self.len, "index":[n.label for n in self.tree.nodes()]}
+
+	def getIndex(self):
+		for n in self.tree.nodes():
+			yield n.label
+
+	def export(self):
+		for (key, seq) in self.data:
+			yield ">%s\n" % key
+			yield seq
+			yield "\n"
+
+
+
+
+
 
 
 def next(s,search):
@@ -332,26 +382,6 @@ def tree_center_layout(tree):
 
 
 
-
-
-
-
-class PhbProject(pyseq.Project):
-	def __init__(self, workdir):
-		super(self.__class__, self).__init__(workdir)
-		self.ressources['phb'] = ''
-
-	def load(self, io, format):
-		self.ressources['phb'] = io.read()
-		tree = NewickTree(None)
-		tree.parse(StringIO.StringIO(self.ressources['phb']))
-		self.ressources['label'] = [node.label for node in tree.leafs()]
-		
-		self.views['tree'] = PhbView(tree=tree, fontsize=12, scale = 1.0)
-		self.views['index'] = pyseq.renderer.IndexRenderer([node.label for node in tree.leafs()])
-		self.views['ruler'] = pyseq.renderer.RulerRenderer(self.views['tree'].size[1])
-
-pyseq.add_project('phb', PhbProject)
 
 
 

@@ -33,6 +33,28 @@ Lucullus.api = function (server, key) {
 	this.resources  = {}
 }
 
+/**
+ * Connect to a Lucullus Server starting a new session
+ * @param {function} Callback
+ * @return Lucullus.call object
+ */
+Lucullus.api.prototype.connect = function() {
+	this.session = ''
+	this.plugins = []
+
+	var c = this.query( 'connect', {'key':this.key});
+	c.wait(function(c) {
+		if(c.result && typeof c.result.session == 'string')
+			c.api.session = c.result.session
+		if(c.result && typeof c.result.plugins == 'object')
+			c.api.plugins = c.result.plugins
+		if(c.error) {
+			this.log.push(c.error)
+		}
+	})
+	return c
+}
+
 
 /**
  * Calls a API method of a Lucullus Server
@@ -58,28 +80,8 @@ Lucullus.api.prototype.query = function(action, input, callback) {
 	return c
 }
 
-/**
- * Connect to a Lucullus Server starting a new session
- * @param {function} Callback
- * @return Lucullus.call object
- */
-Lucullus.api.prototype.connect = function(callback) {
-	this.session = ''
-	this.plugins = []
 
-	var c = this.query( 'connect', {'key':this.key});
-	c.wait(function(c) {
-		if(c.result && typeof c.result.session == 'string')
-			c.api.session = c.result.session
-		if(c.result && typeof c.result.plugins == 'object')
-			c.api.plugins = c.result.plugins
-		if(c.error) {
-			this.log.push(c.error)
-		}
-	})
-	c.wait(callback)
-	return c
-}
+
 
 /**
  * Creates a new Resource and returns a resource object equipped with
@@ -89,13 +91,16 @@ Lucullus.api.prototype.connect = function(callback) {
  * @return Lucullus.Resource object
  */
 Lucullus.api.prototype.create = function(type, name, callback) {
+	if(typeof name === 'function') {
+	  callback = name
+	  name = null
+	}
 	var r = new Lucullus.Resource(this, type, name)
 	r.wait(function(c) {
 		if(! c.resource.error) {
 			c.api.resources[c.resource.id] = c.resource
 		}
 	})
-
 	return r
 }
 
@@ -193,6 +198,7 @@ Lucullus.Call.prototype.run = function(url, parameter, callback, notnow) {
 			url: self.url,
 			data: self.parameter,
 			dataType: "json",
+			type: 'post',
 			success: function(data){
 				if(data && data.session) {
 					self.result = data
@@ -266,6 +272,7 @@ Lucullus.Call.prototype.wait = function(callback) {
  * Creates a server resource of a specific type.
  * @param {Lucullus.Api} api Session to use
  * @param {string} type Name of the resource classto create
+ * @param {string} name Optional identifying name of the to-be-creates resource (overwriting existing)
  */
 Lucullus.Resource = function(api, type, name) {
 	this.api = api
@@ -344,6 +351,21 @@ Lucullus.Resource.prototype.wait = function(callback) {
 	}
 }
 
+/**
+ * Waits for all current calls to finish
+ * Callbacks are executed in-order.
+ * @param {function} callback Function to call (using the call object as parameter)
+ * @return Call object (self)
+ */
+Lucullus.Resource.prototype.onerror = function(callback) {
+	if(typeof callback == 'function') {
+		this.current.wait(function(c) {
+			if(c.error)
+				callback(c)
+		})
+	}
+}
+
 
 /**
  * Runs a server resource api call and updates local attributes.
@@ -401,151 +423,161 @@ Lucullus.Resource.prototype.query = function(action, parameter, callback) {
 
 
 
+Lucullus.ViewMap = function (element, view) {
+	/* Shows a view in an element using a movable tile map */
+	this.view = view
+	this.node = $('<div></div>')
+	this.node.css('overflow','hidden')
+	this.node.css('position','relative')
+	this.node.css('width','100%')
+	this.node.css('height','100%')
+	$(element).empty()
+	$(element).append(this.node)
 
-Lucullus.PixelMap = function (element, imageurl) {
-	this.clipping = [-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE]			// minimum and maximum pixel to show
+	/* Default values */
+	this.clipping = [0,0,0,0]			// minimum and maximum pixel to show
+	this.manclipp = [-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE]			// minimum and maximum pixel as set by user
 	this.tilesize = [256,256]			// Size of a tile in pixel
-	this.tileurl  = null				// Function to generate tile url
-	//this.tilecount = [0,0]			// Number of tiles to show (depends on node width and height)
 	this.offset = [0,0]					// Current offset
-	this.root = $(element)
-	this.node = $('<div style="height:100%; width:100%; position:relative; overflow:hidden;"></div>')
+
 	this.map =  null
 	this.buffer = null
-	this.root.empty()
-	this.root.append(this.node)
 
 	// Some caches for faster processing
 	this.mapsize = [0,0,0,0]			// Size of viewable area and map container (minx, miny, maxx, maxy)
 	this.mapoffset = [0,0]				// Position of map
 	this.bufferoffset = [0,0]			// Position of buffer
 	
-	// callbacks and helper
-	this.imageurl = imageurl
-	
 	this.refresh_speed = 500
 	this.refresh_interval = null
-	
-	this._fill = function(nx, ny, cx, cy) {
-		/* Fills the current map with images using (nx,ny) as number of top left tile and (cx,cy) as number of tiles to show */
-		var tx = this.tilesize[0]
-		var ty = this.tilesize[1]
-		var images = []
-		for(var y=0; y<cy; y++) {
-			for(var x=0; x<cx; x++) {
-				// Image URL
-				var url = this.imageurl(x+nx, y+ny, tx, ty)
-				// Offset within our map in pixel
-				var ox = x * tx
-				var oy = y * ty
-				// Total offset of data area in pixel
-				var tox = (x+nx) * tx
-				var toy = (y+ny) * ty
-				
-				if(tox < this.clipping[2] && toy < this.clipping[3] && (tox + tx) > this.clipping[0] && (toy + ty) > this.clipping[1]) {
-					images.push('<img src="'+url+'" style="position:absolute; width:'+tx+'px; height:'+ty+'px; left:'+ox+'px; top:'+oy+'px;" />')
-				}
-			}
-		}
-		this.map.html(images.join("\n"))
-	}
-	
-	this._new_map = function() {
-		if(!this.imageurl) return
-		/* Adds a new map to the container node */
-		// Height and width of visible area
-		var w = this.node.width()
-		var h = this.node.height()
-		this.mapsize = [w,h,0,0]
-		if(h == 0 || w == 0) return
-		// Number of tiles that fit into that area (+1 for a spare tile in every direction)
-		var overlap = 0 // Spare tiles in every direction (mor tiles, fewer refreshes)
-		var tiles_x = Math.ceil(w / this.tilesize[0] ) + 1 + overlap*2
-		var tiles_y = Math.ceil(h / this.tilesize[1] ) + 1 + overlap*2
-		this.mapsize = [w,h, tiles_x*this.tilesize[0], tiles_y*this.tilesize[1]]
-		// Index number of top left tile
-		var nx = Math.floor(-this.offset[0] / this.tilesize[0])-overlap
-		var ny = Math.floor(-this.offset[1] / this.tilesize[1])-overlap
-		// Total offset of top left tile
-		var ox = nx * this.tilesize[0] 
-		var oy = ny * this.tilesize[1] 
-		// Offset of top left tile relative to visible area
-		var vox = ox+this.offset[0]
-		var voy = oy+this.offset[1]
-
-		if(this.buffer)
-			this.buffer.remove()
-		this.buffer = this.map
-		this.bufferoffset = this.mapoffset
-		this.map = $('<div style="position:absolute; left:'+vox+'px; top:'+voy+'px; width:'+(tiles_x * this.tilesize[0])+'px; height:'+(tiles_y * this.tilesize[1])+'px">Loading...</div>')
-		this.mapoffset = [vox, voy]
-		this._fill(nx, ny, tiles_x, tiles_y)
-		this.node.append(this.map)
-	}
-
-	this.move = function(dx, dy) {
-		/* Moves the map (and buffer) by (dx,dy) pixel and returns the actual movement */
-
-		// Normalise movement (clipping) Don't try to understand this. It had 6 steps each before optimisation  
-		dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + dx)) - this.offset[0]
-		dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + dy)) - this.offset[1]
-
-		if(dx == 0 && dy == 0) {
-			return [0,0]
-		}
-
-		// Update offset
-		this.offset[0] += dx
-		this.offset[1] += dy
-
-		// move map (and buffer, if available)
-		this.mapoffset[0] += dx
-		this.mapoffset[1] += dy
-		this.map.css({'left': this.mapoffset[0] + 'px', 'top': this.mapoffset[1] + 'px'})
-
-		if(this.buffer) {
-			this.bufferoffset[0] += dx
-			this.bufferoffset[1] += dy
-			this.buffer.css({'left': this.bufferoffset[0] + 'px', 'top': this.bufferoffset[1] + 'px'})
-		}
-
-		return [dx, dy].slice()
-	}
 
 	var obj = this
-	this._refresh_tick = function() {
-
+	obj.refresh = function() {
 		/* Adds a new map whenever needed (call every second or so) */
 	    if(obj.mapoffset[0] > 0
 		|| obj.mapoffset[0] + obj.mapsize[2] < obj.mapsize[0]
 		|| obj.mapoffset[1] > 0
 		|| obj.mapoffset[1] + obj.mapsize[3] < obj.mapsize[1] )
-			obj._new_map()
-			
-		obj.refresh_interval = setTimeout(obj._refresh_tick, obj.refresh_speed)
+			obj.new_map()
+
+		obj.refresh_interval = setTimeout(obj.refresh, obj.refresh_speed)
 	    return
 	}
 
-	this.set_size = function(w,h) {
-		/** Sets the size of the mapping area and invokes a refresh.*/
-		this.node.width(w + 'px')
-		this.node.height(h + 'px')
-		this._new_map()
-	}
+	this.view.wait(function(c) {
+		obj.new_map()
+		obj.refresh()
+	})
 	
-	this.set_clipping = function(minx, miny, maxx, maxy) {
-		this.clipping = [minx, miny, maxx, maxy]
-		this._new_map()
-	}
-
-	this._new_map()
-	this._refresh_tick()
 }
 
 
+Lucullus.ViewMap.prototype.new_map = function () {
+	if(this.view && !this.view.error && this.view.width && this.view.height && this.view.offset) {
+		var width = this.view.width
+		var height = this.view.height
+		var ox = this.view.offset[0]
+		var oy = this.view.offset[1]
+		this.clipping[0] = Math.max(ox, this.manclipp[0])
+		this.clipping[1] = Math.max(oy, this.manclipp[1])
+		this.clipping[2] = Math.min(width+ox, this.manclipp[2])
+		this.clipping[3] = Math.min(height+oy, this.manclipp[3])
+		var obj = this
+		this.imgurl = function(numberx, numbery, sizex, sizey) {
+			return obj.view.api.server + '/' + obj.view.api.session + '/' + obj.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png'
+		}
+	} else {
+		return
+	}
+	
+	this.node.width(this.node.parent().width()+'px')
+	this.node.height(this.node.parent().height()+'px')
+	var w = this.node.width()
+	var h = this.node.height()
+	this.mapsize = [w,h,0,0]
+	if(h == 0 || w == 0) return
+	// Number of tiles that fit into that area (+1 for a spare tile in every direction)
+	var overlap = 0 // Spare tiles in every direction (mor tiles, fewer refreshes)
+	var tiles_x = Math.ceil(w / this.tilesize[0] ) + 1 + overlap * 2
+	var tiles_y = Math.ceil(h / this.tilesize[1] ) + 1 + overlap * 2
+	this.mapsize = [w,h, tiles_x*this.tilesize[0], tiles_y*this.tilesize[1]]
+	// Index number of top left tile
+	var nx = Math.floor(-this.offset[0] / this.tilesize[0])-overlap
+	var ny = Math.floor(-this.offset[1] / this.tilesize[1])-overlap
+	// Total offset of top left tile
+	var ox = nx * this.tilesize[0] 
+	var oy = ny * this.tilesize[1] 
+	// Offset of top left tile relative to visible area
+	var vox = ox+this.offset[0]
+	var voy = oy+this.offset[1]
 
+	if(this.buffer)
+		this.buffer.remove()
+	this.buffer = this.map
+	this.bufferoffset = this.mapoffset
+	this.map = $('<div style="position:absolute; left:'+vox+'px; top:'+voy+'px; width:'+(tiles_x * this.tilesize[0])+'px; height:'+(tiles_y * this.tilesize[1])+'px">Loading...</div>')
+	this.mapoffset = [vox, voy]
+	this.map.html(this.imagetiles(nx, ny, tiles_x, tiles_y))
+	this.node.append(this.map)
+}
 
+Lucullus.ViewMap.prototype.imagetiles = function(nx, ny, cx, cy) {
+	/* Fills the current map with images using (nx,ny) as number of top left tile and (cx,cy) as number of tiles to show */
+	var tx = this.tilesize[0]
+	var ty = this.tilesize[1]
+	var images = []
+	for(var y=0; y<cy; y++) {
+		for(var x=0; x<cx; x++) {
+			// Image URL
+			var url = this.imgurl(x+nx, y+ny, tx, ty)
+			// Offset within our map in pixel
+			var ox = x * tx
+			var oy = y * ty
+			// Total offset of data area in pixel
+			var tox = (x+nx) * tx
+			var toy = (y+ny) * ty
+			
+			if(tox < this.clipping[2] && toy < this.clipping[3] && (tox + tx) > this.clipping[0] && (toy + ty) > this.clipping[1]) {
+				images.push('<img src="'+url+'" style="position:absolute; width:'+tx+'px; height:'+ty+'px; left:'+ox+'px; top:'+oy+'px;" />')
+			}
+		}
+	}
+	return images.join("\n")
+}
+	
+Lucullus.ViewMap.prototype.move = function(dx, dy) {
+	/* Moves the map (and buffer) by (dx,dy) pixel and returns the actual movement */
 
+	// Normalise movement (clipping)
+	dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + dx)) - this.offset[0]
+	dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + dy)) - this.offset[1]
+
+	if(dx == 0 && dy == 0) {
+		return [0,0]
+	}
+
+	// Update offset
+	this.offset[0] += dx
+	this.offset[1] += dy
+
+	// move map (and buffer, if available)
+	this.mapoffset[0] += dx
+	this.mapoffset[1] += dy
+	this.map.css({'left': this.mapoffset[0] + 'px', 'top': this.mapoffset[1] + 'px'})
+
+	if(this.buffer) {
+		this.bufferoffset[0] += dx
+		this.bufferoffset[1] += dy
+		this.buffer.css({'left': this.bufferoffset[0] + 'px', 'top': this.bufferoffset[1] + 'px'})
+	}
+
+	return [dx, dy].slice()
+}
+
+Lucullus.ViewMap.prototype.set_clipping = function(x,y,w,h) {
+	/** Sets the size of the mapping area and invokes a refresh.*/
+	this.manclipp = [x,y,x+w,y+h]
+}
 
 
 

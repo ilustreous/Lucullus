@@ -9,8 +9,8 @@ Copyright (c) 2008 Marcel Hellkamp. All rights reserved.
 
 import cPickle as pickle
 import UserDict
-from lucullus.lib.pyseq import config
-from lucullus.lib.pyseq.renderer import hexcolor
+from lucullus.base import config
+from lucullus.base.renderer import hexcolor
 import urllib2
 import tempfile
 import math
@@ -20,22 +20,36 @@ import time
 import os
 import os.path
 import random
+import inspect
 
 """ List of Resource plugins """
 plugins = {}
 
-def register_plugin(name, obj):
+def register_plugin(name, cls):
+	if not isinstance(cls, type):
+		cls = cls.__class__
+	if not issubclass(cls, BaseResource):
+		raise AttributeError('Resources must implement BaseResource.')
 	if name not in plugins:
-		plugins[name] = obj
+		plugins[name] = cls
 
 
 
 
+
+
+
+class SessionError(Exception): pass
+class SessionNoResourceError(SessionError): pass
+class SessionNoPluginError(SessionError): pass
 
 
 class ResourceError(Exception): pass
 class ResourceUploadError(ResourceError): pass
 class ResourceQueryError(ResourceError): pass
+class ResourceQueryNoApiError(ResourceQueryError): pass
+class ResourceQueryOptionsError(ResourceQueryError): pass
+
 
 
 
@@ -47,12 +61,9 @@ class Session(object):
 
 	def __init__(self, savepath):
 		""" Startes a new session and creates a new workpath. Every session.id is unique for a savepath.
-		@param savepath writable path to create the workpath in
-		@return session id (uniq string with len() = 32) """
+		@param savepath writable path to create the workpath in """
 		self.id = None
 		self.savepath = savepath + "/"
-		self.workpath = None
-		self.filename = None
 
 		self.resources = {}
 		self.ctime = time.time()
@@ -61,18 +72,24 @@ class Session(object):
 
 		while 1:
 			self.id	 = "%x" % random.getrandbits(128)
-			path = self.default_path()
-			if not os.path.isdir(path):
+			if not os.path.isdir(self.workpath):
+				os.makedirs(self.workpath)
 				break
 
-		os.makedirs(path)
-		self.workpath = path + "/"
-		self.filename = path + "/session.pkl"
-
-	def default_path(self):
+	@property
+	def workpath(self):
 		parts = (self.savepath, self.id[0:2], self.id[2:4], self.id)
 		path = '/'.join(parts)
 		return os.path.abspath(path)
+
+	@property
+	def filename(self):
+		return self.workpath + '/session.pkl'
+
+	@property
+	def plugins(self):
+		""" Returns a List of available plugins """
+		return plugins
 
 	def touch(self, mtime = True):
 		""" Mark the resource as modified """
@@ -80,29 +97,29 @@ class Session(object):
 			self.mtime = time.time()
 		self.atime = time.time()
 
-	def new_resource(self, cls, name = None):
+	def new_resource(self, plugin, name = None):
 		""" Creates a new Resource in this session """
-		if not isinstance(cls, type):
-			raise AttributeError('Cannot create a resource from an object.')
-		if not issubclass(cls, BaseResource):
-			raise AttributeError('All resources must implement BaseResource.')
+		if plugin not in self.plugins:
+			raise SessionNoPluginError('Unknown plugin %s' % plugin)
 
 		c = 0
 		while not name or name in self.resources:
 			c += 1
 			name = 'tmp%d' % c
 		name = str(name)
-		resource = cls(self)
-		resource.id = name
+		resource = self.plugins[plugin](self, name)
 		self.resources[name] = resource
 		self.touch()
 		return resource
 
-	def get_resource(self, id):
-		try:
-			return self.resources[str(id)]
-		except:
-			return None
+	def get_resource(self, id, default=None):
+		return self.resources.get(str(id), default)
+
+	def query_resource(self, id, query, options):
+		if str(id) not in self.resources:
+			raise SessionNoResourceError('Resource ID %s not found.' % str(id))
+		else:
+			return self.resources[str(id)].query(query, **options)
 
 
 
@@ -111,32 +128,60 @@ class Session(object):
 
 class BaseResource(object):
 	""" An empty cache-, pick- and saveable data container bound to a session. """
-	def __init__(self, session):
-		self.ctime = time.time()
+	def __init__(self, session, id):
 		self.mtime = time.time()
 		self.atime = time.time()
+		self.id = id
 		self.session = session
-		self.id = None
 		self.prepare()
-	
+
 	def status(self):
-		""" Shoueld return a dict with some infos about this resource """
+		""" Should return a dict with some infos about this resource """
 		return {}
-	
+
 	def prepare(self):
+		""" Called on resource creation """
 		pass
+
+	def update(self):
+		""" Called if resource dependencies got an update """
 
 	def touch(self, mtime = True):
 		""" Mark the resource as modified """
 		if mtime:
 			self.mtime = time.time()
 		self.atime = time.time()
-		
+
 	def export(self):
 		return ''
 
-	def getApiMethod(self, name):
-		return getattr(self, "api_" + name)
+	def query(self, name, **options):
+		try:
+			c = getattr(self, "api_" + name)
+		except (AttributeError), e:
+			raise QueryNoApiError("Resource %s does not implement %s()" % (self.__class__.__name__, name))
+		
+		# Parameter testing
+		provided = set(options.keys())
+		available, onestar, twostar, defaults = inspect.getargspec(c)
+		available.remove('self')
+		if not defaults:
+			requied = set(available)
+		else:
+			requied = set(available[0:-len(defaults)])
+		available = set(available)
+		missing = requied - provided
+		if missing:
+			raise QueryOptionsError('Missing arguments: %s' % ','.join(missing))
+		unknown = provided - available
+		if unknown and not twostar:
+			raise QueryOptionsError('Unknown arguments: %s' % ','.join(unknown))
+
+		self.touch(False)
+		return c(**options)
+
+
+
 
 
 
@@ -190,14 +235,14 @@ class BaseView(BaseResource):
 		""" Should return the absolute size of the drawable area in pixel. """
 		return (0,0)
 		
+	def offset(self):
+		""" Should return the (x,y) offset of the drawable area in pixel. """
+		return (0,0)
+
 	def status(self):
 		w, h = self.size()
 		ox, oy = self.offset()
 		return {'width':w, 'height':h, 'offset':[ox, oy], 'size':[w, h]}
-		
-	def offset(self):
-		""" Should return the (x,y) offset of the drawable area in pixel. """
-		return (0,0)
 
 	def render(self, context, x=0, y=0, width=0, height=0):
 		""" Renders the selected area of the data into a cairo context. """
@@ -297,7 +342,6 @@ class RulerView(BaseView):
 		self.marks      = 1
 		self.digits     = 10
 		self.fontsize   = 12
-		self.skip       = 0
 		self.color = {}
 		self.color['fontcolor'] = hexcolor('#000000FF')
 
@@ -305,14 +349,13 @@ class RulerView(BaseView):
 		self.step       = int(options.get('step', self.step))
 		self.marks      = int(options.get('marks', self.marks))
 		self.digits     = int(options.get('digits', self.digits))
-		self.skip       = int(options.get('skip', self.skip))
 		self.fontsize   = int(options.get('fontsize', self.fontsize))
 
 	def size(self):
 		return (2**16, self.fontsize + 5)
 		
 	def offset(self):
-		return (-2**15 + self.skip,0)
+		return (0,0)
 
 	def render(self, context, x, y, w, h):
 		cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
@@ -348,56 +391,6 @@ class RulerView(BaseView):
 
 			
 		return self
-
-		"""
-		# Rows to consider
-		row_first = int(math.floor( float(vy-ay)	/ fieldsize))
-		row_last  = int(math.ceil(	float(vy-ay+vh) / fieldsize))
-		col_first = int(math.floor( float(vx-ax)	/ fieldsize))
-		col_last  = int(math.ceil(	float(vx-ax+vw) / fieldsize))
-
-		# To prevent cutting numbers at the view border, we have to look bejond the borders
-		col_last	+= 10 - col_last % 10 + 1
-		col_first	-= col_first % 10 + 1
-
-
-		# Font settings
-		c.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-		fo = cairo.FontOptions()
-		fo.set_hint_metrics(cairo.HINT_METRICS_ON)
-		fo.set_hint_style(cairo.HINT_STYLE_NONE)
-		fo.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
-		c.set_font_options(fo)
-		if not self.fontsize:
-			fsize = sum(c.font_extents()[0:2])
-			fsize = float(fieldsize) * 0.75 * (fieldsize / fsize)
-			self.fontsize = fsize
-		c.set_font_size(self.fontsize)
-		c.set_source_rgb(0, 0, 0)
-		font_extends = context.font_extents()
-
-		for i in range(col_first,col_last):
-			# Draw marks
-			x = i * fieldsize + fieldsize/2
-			if (i % 5) == 0:
-				c.rectangle(x,20-5,1,ah)
-			elif (i % 10) == 0:
-				c.rectangle(x-1,20-5,3,ah)
-			else:
-				c.rectangle(x,20-2,1,ah)
-			c.fill()
-
-			# Draw Numbers			
-			if (i % 10) == 0:
-				name = str(i)
-				text_width, text_height = c.text_extents(name)[2:4]
-				x = i * fieldsize + fieldsize/2 - text_width/2
-				y = 20 - font_extends[1] - 5
-				c.move_to(x, y)
-				c.show_text(name)
-
-		return self
-		"""
 
 
 

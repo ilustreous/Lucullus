@@ -1,3 +1,0 @@
-include lucullus/config/deployment.ini_tmpl
-recursive-include lucullus/public *
-recursive-include lucullus/templates *

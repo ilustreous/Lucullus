@@ -13,14 +13,14 @@ import random
 import os
 import sys
 
-from lucullus.lib import pyseq
-from lucullus.lib.pyseq import renderer
-from lucullus.lib.pyseq import shapes
+from lucullus import base
+from lucullus.base import renderer
+from lucullus.base import shapes
 from Bio import SeqIO, Seq, SeqRecord
 
 
 
-class SequenceResource(pyseq.BaseResource):
+class SequenceResource(base.BaseResource):
 	def prepare(self):
 		self.data	= []
 		self.len	= 0
@@ -38,16 +38,16 @@ class SequenceResource(pyseq.BaseResource):
 		self.source = source
 		self.format = format
 		text = self.session.get_resource(self.source)
-		if not isinstance(text, pyseq.TextResource):
-			raise pyseq.ResourceQueryError('Can not load resources other than TextResource')
+		if not isinstance(text, base.TextResource):
+			raise base.ResourceQueryError('Can not load resources other than TextResource')
 	
 		data = text.getIO()
 		try:
 		  data = SeqIO.parse(data, self.format)
 		except Exception, e:
-			raise pyseq.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
+			raise base.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
 		if not data:
-			raise pyseq.ResourceQueryError('No sequences found.')
+			raise base.ResourceQueryError('No sequences found.')
 
 		self.data += [[seq.id, str(seq.seq)] for seq in data]
 		self.len = len(self.data)
@@ -73,7 +73,7 @@ class SequenceResource(pyseq.BaseResource):
 			yield "\n"
 
 
-pyseq.register_plugin("SequenceResource", SequenceResource)
+base.register_plugin("SequenceResource", SequenceResource)
 
 
 
@@ -81,7 +81,7 @@ pyseq.register_plugin("SequenceResource", SequenceResource)
 
 
 
-class SequenceView(pyseq.BaseView):
+class SequenceView(base.BaseView):
 	def prepare(self):
 		self.fieldsize = 12
 		self.data = []
@@ -89,31 +89,31 @@ class SequenceView(pyseq.BaseView):
 		self.rows = 0
 		self.source = None
 		self.color = {}
-		self.color['*'] = pyseq.renderer.hexcolor('#000000FF')
-		self.color['-'] = pyseq.renderer.hexcolor('#999999FF')
-		self.color['A'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['C'] = pyseq.renderer.hexcolor('#A20000FF')
-		self.color['E'] = pyseq.renderer.hexcolor('#FF0000FF')
-		self.color['D'] = pyseq.renderer.hexcolor('#FF0000FF')
-		self.color['G'] = pyseq.renderer.hexcolor('#FF00FFFF')
-		self.color['F'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['I'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['H'] = pyseq.renderer.hexcolor('#0080FFFF')
-		self.color['K'] = pyseq.renderer.hexcolor('#0000D9FF')
-		self.color['M'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['L'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['N'] = pyseq.renderer.hexcolor('#8080C0FF')
-		self.color['Q'] = pyseq.renderer.hexcolor('#7171B9FF')
-		self.color['P'] = pyseq.renderer.hexcolor('#D9D900FF')
-		self.color['S'] = pyseq.renderer.hexcolor('#FF8000FF')
-		self.color['R'] = pyseq.renderer.hexcolor('#0000FFFF')
-		self.color['T'] = pyseq.renderer.hexcolor('#FF8000FF')
-		self.color['W'] = pyseq.renderer.hexcolor('#00FF00FF')
-		self.color['V'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['Y'] = pyseq.renderer.hexcolor('#008000FF')
-		self.color['X'] = pyseq.renderer.hexcolor('#000000FF')
-		self.color['section2'] = pyseq.renderer.hexcolor('#EEEEEEFF')
-		self.color['section1'] = pyseq.renderer.hexcolor('#FFFFFFFF')
+		self.color['*'] = renderer.hexcolor('#000000FF')
+		self.color['-'] = renderer.hexcolor('#999999FF')
+		self.color['A'] = renderer.hexcolor('#008000FF')
+		self.color['C'] = renderer.hexcolor('#A20000FF')
+		self.color['E'] = renderer.hexcolor('#FF0000FF')
+		self.color['D'] = renderer.hexcolor('#FF0000FF')
+		self.color['G'] = renderer.hexcolor('#FF00FFFF')
+		self.color['F'] = renderer.hexcolor('#008000FF')
+		self.color['I'] = renderer.hexcolor('#008000FF')
+		self.color['H'] = renderer.hexcolor('#0080FFFF')
+		self.color['K'] = renderer.hexcolor('#0000D9FF')
+		self.color['M'] = renderer.hexcolor('#008000FF')
+		self.color['L'] = renderer.hexcolor('#008000FF')
+		self.color['N'] = renderer.hexcolor('#8080C0FF')
+		self.color['Q'] = renderer.hexcolor('#7171B9FF')
+		self.color['P'] = renderer.hexcolor('#D9D900FF')
+		self.color['S'] = renderer.hexcolor('#FF8000FF')
+		self.color['R'] = renderer.hexcolor('#0000FFFF')
+		self.color['T'] = renderer.hexcolor('#FF8000FF')
+		self.color['W'] = renderer.hexcolor('#00FF00FF')
+		self.color['V'] = renderer.hexcolor('#008000FF')
+		self.color['Y'] = renderer.hexcolor('#008000FF')
+		self.color['X'] = renderer.hexcolor('#000000FF')
+		self.color['section2'] = renderer.hexcolor('#EEEEEEFF')
+		self.color['section1'] = renderer.hexcolor('#FFFFFFFF')
 
 	def size(self):
 		return (self.cols*self.fieldsize, self.rows*self.fieldsize)
@@ -130,7 +130,7 @@ class SequenceView(pyseq.BaseView):
 		for key in options:
 			if key.startswith('color-'):
 				try:
-				  self.color[key[6:]] = pyseq.renderer.hexcolor(options[key])
+				  self.color[key[6:]] = base.renderer.hexcolor(options[key])
 				except AttributeError:
 					pass
 
@@ -138,7 +138,7 @@ class SequenceView(pyseq.BaseView):
 		self.source = source
 		seq = self.session.get_resource(self.source)
 		if not isinstance(seq, SequenceResource):
-			raise pyseq.ResourceQueryError('Can not load resources other than SequenceResource')
+			raise base.ResourceQueryError('Can not load resources other than SequenceResource')
 		self.data = list(seq.getData())
 		self.cols = max([len(d) for d in self.data])
 		self.rows = len(self.data)
@@ -183,7 +183,7 @@ class SequenceView(pyseq.BaseView):
 		#col_last  = min(col_last, self.cols)
 		
 		# Draw background
-		pyseq.renderer.draw_stripes(c, cminx, cminy, w, h, (fieldsize*10), color["section1"], color["section2"])
+		base.renderer.draw_stripes(c, cminx, cminy, w, h, (fieldsize*10), color["section1"], color["section2"])
 
 		# Draw data
 		for row in range(row_first, row_last):
@@ -204,7 +204,7 @@ class SequenceView(pyseq.BaseView):
 				context.show_text(char)
 		return self
 
-pyseq.register_plugin("SequenceView", SequenceView)
+base.register_plugin("SequenceView", SequenceView)
 
 
 
