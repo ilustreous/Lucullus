@@ -107,7 +107,7 @@ def connect(request):
 
 
 
-@itty.post('/api/((?P<sid>[a-f0-9]{32})/)?create')
+@itty.post('/api/:sid:[a-f0-9]{32}:/create')
 @jsonify
 @with_session
 def upload(request):
@@ -126,7 +126,7 @@ def upload(request):
 
 
 
-@itty.post('/api/((?P<sid>[a-f0-9]{32})/(?P<rid>[^/]+)/)?(?P<query>[^/]+)')
+@itty.post('/api/:sid:[a-f0-9]{32}:/:rid/:query')
 @jsonify
 @with_session
 @with_resource
@@ -142,7 +142,7 @@ def query(request, query):
 
 
 
-@itty.get('/api/(?P<sid>[a-f0-9]{32})/(?P<rid>[^/]+)/x(?P<x>[0-9]+)y(?P<y>[0-9]+)w(?P<w>[0-9]{,3})h(?P<h>[0-9]{,3})\.(?P<f>png+)')
+@itty.get('/api/:sid:[a-f0-9]{32}:/:rid/x:x:[0-9]+:y:y:[0-9]+:w:w:[0-9]+:h:h:[0-9]+:\.:f:(png):')
 @with_session
 @with_resource
 def render(request, x, y, w, h, f):
@@ -199,7 +199,7 @@ def render(request, x, y, w, h, f):
 	request.http_header['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
 	return open(filename)
 
-
+print itty.REQUEST_MAPPINGS['POST'][-1][0].pattern
 
 @itty.get('/')
 def index(request):
@@ -288,7 +288,7 @@ def index(request):
 # different than where your ``itty.py`` lives, manually setup your root
 # directory as well. Finally, use the ``static_file`` handler to serve up the
 # file.
-@itty.get('/(?P<filename>(js|css|test)/.+)')
+@itty.get('/:filename:(js|css|test)/.+:')
 def static(request, filename):
     root = abspath('./public')
     return itty.static_file(request, filename=filename, root=root)
