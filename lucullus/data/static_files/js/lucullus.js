@@ -7,18 +7,12 @@
 function Lucullus() {}
 
 Lucullus.api = function (server, key) {
-	/** Session id
-	 * @type string */
-	this.session	= ''
 	/** API location (url) http://www.example.com/seqmap/api 
 	 * @type string */
 	this.server		= server
 	/** API key 
 	 * @type string */
 	this.key		= key
-	/** API version number 
-	 * @type int */
-	this.api		= 1	
 	/** List of supported plugins 
 	 * @type List */
 	this.plugins  = []
@@ -33,26 +27,22 @@ Lucullus.api = function (server, key) {
 	this.resources  = {}
 }
 
-/**
- * Connect to a Lucullus Server starting a new session
- * @param {function} Callback
- * @return Lucullus.call object
- */
-Lucullus.api.prototype.connect = function() {
-	this.session = ''
-	this.plugins = []
 
-	var c = this.query( 'connect', {'key':this.key});
-	c.wait(function(c) {
-		if(c.result && typeof c.result.session == 'string')
-			c.api.session = c.result.session
-		if(c.result && typeof c.result.plugins == 'object')
-			c.api.plugins = c.result.plugins
-		if(c.error) {
-			this.log.push(c.error)
+/**
+ * Creates a new Resource and returns a resource object equipped with
+ * available api methods.
+ * @param {string} type Type of the resource (one of api.plugins)
+ * @param {function} Callback
+ * @return Lucullus.Resource object
+ */
+Lucullus.api.prototype.create = function(type, options) {
+	var r = new Lucullus.Resource(this, type, options)
+	r.wait(function(c) {
+		if(! c.resource.error) {
+			c.api.resources[c.resource.id] = c.resource
 		}
 	})
-	return c
+	return r
 }
 
 
@@ -64,7 +54,7 @@ Lucullus.api.prototype.connect = function() {
  * @return Lucutus.call object with $this attached to $call.api
  */
 
-Lucullus.api.prototype.query = function(action, input, callback) {
+Lucullus.api.prototype.query = function(action, options) {
 	var self = this
 	var url = self.server + '/'
 	
@@ -75,42 +65,10 @@ Lucullus.api.prototype.query = function(action, input, callback) {
 	url = url + action
  	var c = new Lucullus.Call()
 	c.api = this
-	c.run(url, input, callback)
+	c.run(url, options)
 	self.log.push(c)
 	return c
 }
-
-
-
-
-/**
- * Creates a new Resource and returns a resource object equipped with
- * available api methods.
- * @param {string} type Type of the resource (one of api.plugins)
- * @param {function} Callback
- * @return Lucullus.Resource object
- */
-Lucullus.api.prototype.create = function(type, name, callback) {
-	if(typeof name === 'function') {
-	  callback = name
-	  name = null
-	}
-	var r = new Lucullus.Resource(this, type, name)
-	r.wait(function(c) {
-		if(! c.resource.error) {
-			c.api.resources[c.resource.id] = c.resource
-		}
-	})
-	return r
-}
-
-
-
-
-
-
-
-
 
 
 
@@ -200,7 +158,7 @@ Lucullus.Call.prototype.run = function(url, parameter, callback, notnow) {
 			dataType: "json",
 			type: 'post',
 			success: function(data){
-				if(data && data.session) {
+				if(data && !data.error) {
 					self.result = data
 				} else if(data && data.error) {
 					self.fail(data.error, data)
@@ -274,7 +232,7 @@ Lucullus.Call.prototype.wait = function(callback) {
  * @param {string} type Name of the resource classto create
  * @param {string} name Optional identifying name of the to-be-creates resource (overwriting existing)
  */
-Lucullus.Resource = function(api, type, name) {
+Lucullus.Resource = function(api, type, options) {
 	this.api = api
 	this.id	= name
 	this.type = type
@@ -284,26 +242,25 @@ Lucullus.Resource = function(api, type, name) {
 	var self = this
 	
 	// Request resource on server
-	if(name)
-	  var call = this.api.query( 'create', {'type':type, 'name':name})
-	else
-	  var call = this.api.query( 'create', {'type':type})
-	this.current = call
-	call.resource = this
-	//c.api = this.api // Done in api.call()
+	if(!options) var options = {}
+	options['type'] = type
+	options['apikey'] = self.api.key
+    var call = this.api.query( 'create', options)
+	self.current = call
+	call.resource = self
 
 	// Configure self and bind a functin for every 'apis' name
 	call.wait(function(c) {
 		if(c.result) {
-			if(typeof c.result.resource === 'string' || typeof c.result.resource === 'number') {
-				c.resource.id = c.result.resource
-				if(typeof c.result.status === 'object')
-					c.resource.update(c.result.status)
-				if(typeof c.result.apis === 'object') {
-					jQuery.each(c.result.apis, function(i, name) {
+			if(typeof c.result.id === 'string' || typeof c.result.id === 'number') {
+				c.resource.id = c.result.id
+				if(typeof c.result.state === 'object')
+					c.resource.update(c.result.state)
+				if(typeof c.result.api === 'object') {
+					jQuery.each(c.result.api, function(i, name) {
 						if(typeof c.resource[name] === 'undefined') {
-							c.resource[name] = function(opt, callback2) {
-								return this.query(name, opt, callback2)
+							c.resource[name] = function(opt) {
+								return self.query(name, opt)
 							}
 						}
 					});
@@ -327,7 +284,7 @@ Lucullus.Resource.prototype.update = function(dict) {
 	var self = this
 	jQuery.each(dict, function(key, val) {
 		// Protect important attributes
-		if(-1 != jQuery.inArray(key, ['api','id','type','result','error','lastcall']))
+		if(-1 != jQuery.inArray(key, ['api','id','type','error','queue','current']))
 		  return
 		// Protect functions
 		if(typeof self[key] == 'function')
@@ -367,6 +324,55 @@ Lucullus.Resource.prototype.onerror = function(callback) {
 }
 
 
+
+/**
+ * Runs a server resource setup call and updates local attributes.
+ * Does nothing if this.error is true. Delete this.error to recover from errors.
+ * @param {object} parameter Dict of call parameters
+ * @param {function} Callback
+ * @return Call object with $this attached to $call.resource ad $this.api attached to $call.api
+ */
+Lucullus.Resource.prototype.setup = function(options, callback) {
+	var self = this
+	var url = this.api.server + '/r' + this.id + '/setup'
+	if(!options) var options = {}
+	options['apikey'] = self.api.key
+	var call = new Lucullus.Call(url, options, callback, true)
+	call.resource = this
+	call.wait(function(c) {
+		if(c.result) {
+			if(typeof c.result.id !== 'undefined' && c.result.id == c.resource.id) {
+				if(typeof c.result.state === 'object')
+					c.resource.update(c.result.state)
+			} else {
+				c.resource.error = c.result
+				c.resource.error['message'] = "Resource ID mismatch!"
+			}
+		} else {
+			c.resource.error = c.error
+		}
+	})
+
+	/* Calls are limited to one call per resource at a time, so we use the wait() queue of the last call to start the current call */
+	this.queue.push(call)
+	var old = self.current
+	self.current = call
+
+	old.wait(function() {
+		var next = self.queue.shift()
+		if(next) {
+			next.run()
+		}
+	})
+
+	return call
+}
+
+
+
+
+
+
 /**
  * Runs a server resource api call and updates local attributes.
  * Does nothing if this.error is true. Delete this.error to recover from errors.
@@ -375,16 +381,19 @@ Lucullus.Resource.prototype.onerror = function(callback) {
  * @param {function} Callback
  * @return Call object with $this attached to $call.resource ad $this.api attached to $call.api
  */
-Lucullus.Resource.prototype.query = function(action, parameter, callback) {
+Lucullus.Resource.prototype.query = function(action, options, callback) {
 	var self = this
-	var url = this.api.server + '/' + this.api.session + '/' + this.id + '/' + action
-	var call = new Lucullus.Call(url, parameter, callback, true)
+	var url = this.api.server + '/r' + this.id + '/' + action
+	if(!options) var options = {}
+	options['apikey'] = self.api.key
+	var call = new Lucullus.Call(url, options, callback, true)
 	call.api = this.api
 	call.resource = this
 	call.wait(function(c) {
 		if(c.result) {
-			if(typeof c.result.resource !== 'undefined' && c.result.resource == c.resource.id && c.result.status) {
-				c.resource.update(c.result.status)
+			if(typeof c.result.id !== 'undefined' && c.result.id == c.resource.id) {
+				if(typeof c.result.state === 'object')
+					c.resource.update(c.result.state)
 			} else {
 				c.resource.error = c.result
 				c.resource.error['message'] = "Resource ID mismatch!"
@@ -483,8 +492,8 @@ Lucullus.ViewMap.prototype.new_map = function () {
 		this.clipping[2] = Math.min(width+ox, this.manclipp[2])
 		this.clipping[3] = Math.min(height+oy, this.manclipp[3])
 		var obj = this
-		this.imgurl = function(numberx, numbery, sizex, sizey) {
-			return obj.view.api.server + '/' + obj.view.api.session + '/' + obj.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png'
+		obj.imgurl = function(numberx, numbery, sizex, sizey) {
+			return obj.view.api.server + '/r' + obj.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png'
 		}
 	} else {
 		return
@@ -563,8 +572,10 @@ Lucullus.ViewMap.prototype.move = function(dx, dy) {
 	// move map (and buffer, if available)
 	this.mapoffset[0] += dx
 	this.mapoffset[1] += dy
-	this.map.css({'left': this.mapoffset[0] + 'px', 'top': this.mapoffset[1] + 'px'})
-
+	if(this.map) {
+		this.map.css({'left': this.mapoffset[0] + 'px', 'top': this.mapoffset[1] + 'px'})
+	}
+	
 	if(this.buffer) {
 		this.bufferoffset[0] += dx
 		this.bufferoffset[1] += dy

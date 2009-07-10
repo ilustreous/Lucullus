@@ -12,6 +12,8 @@ import math
 import random
 import os
 import sys
+import urllib2
+from StringIO import StringIO
 
 from lucullus import base
 from lucullus.base import renderer
@@ -20,74 +22,15 @@ from Bio import SeqIO, Seq, SeqRecord
 
 
 
-class SequenceResource(base.BaseResource):
+class SequenceResource(base.BaseView):
 	def prepare(self):
-		self.data	= []
-		self.len	= 0
-		self.width	= 0
-		self.source = None
-		self.format = None
-
-	def status(self):
-		s = super(SequenceResource, self).status()
-		s['len'] = self.len
-		s['width'] = self.width
-		return s
-
-	def api_load(self, source, format='fasta'):
-		self.source = source
-		self.format = format
-		text = self.session.get_resource(self.source)
-		if not isinstance(text, base.TextResource):
-			raise base.ResourceQueryError('Can not load resources other than TextResource')
-	
-		data = text.getIO()
-		try:
-		  data = SeqIO.parse(data, self.format)
-		except Exception, e:
-			raise base.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
-		if not data:
-			raise base.ResourceQueryError('No sequences found.')
-
-		self.data += [[seq.id, str(seq.seq)] for seq in data]
-		self.len = len(self.data)
-		self.width = max([len(seq[1]) for seq in self.data])
-		self.touch()
-		return {"len":self.len, 'width':self.width}
-
-	def api_index(self, **options):
-		return {"len":self.len, "index":list(self.getIndex())}
-
-	def getIndex(self):
-		for data in self.data:
-			yield data[0]
-
-	def getData(self):
-		for data in self.data:
-			yield data[1]
-
-	def export(self):
-		for (key, seq) in self.data:
-			yield ">%s\n" % key
-			yield seq
-			yield "\n"
-
-
-base.register_plugin("SequenceResource", SequenceResource)
-
-
-
-
-
-
-
-class SequenceView(base.BaseView):
-	def prepare(self):
-		self.fieldsize = 12
-		self.data = []
+		self.sequences = []
+		self.keys = []
 		self.cols = 0
 		self.rows = 0
 		self.source = None
+		self.format = 'fasta'
+		self.fontsize = 12
 		self.color = {}
 		self.color['*'] = renderer.hexcolor('#000000FF')
 		self.color['-'] = renderer.hexcolor('#999999FF')
@@ -115,40 +58,67 @@ class SequenceView(base.BaseView):
 		self.color['section2'] = renderer.hexcolor('#EEEEEEFF')
 		self.color['section1'] = renderer.hexcolor('#FFFFFFFF')
 
-	def size(self):
-		return (self.cols*self.fieldsize, self.rows*self.fieldsize)
-		
-	def status(self):
-		s = super(SequenceView, self).status()
-		s['fieldsize'] = self.fieldsize
-		s['rows'] = self.rows
-		s['columns'] = self.cols
-		return s
 
-	def api_set(self, **options):
-		self.fieldsize = int(options.get('fieldsize', self.fieldsize))
+	def configure(self, **options):
+		self.fontsize = int(options.get('fontsize', self.fontsize))
+		self.source = options.get('source', self.source)
+		self.format = options.get('format', self.format)
+		if 'source' in options:
+			self.api_load(source=self.source, format=self.format)
 		for key in options:
 			if key.startswith('color-'):
-				try:
-				  self.color[key[6:]] = base.renderer.hexcolor(options[key])
-				except AttributeError:
-					pass
+				self.color[key[6:]] = base.renderer.hexcolor(options[key])
 
-	def api_load(self, source, **options):
-		self.source = source
-		seq = self.session.get_resource(self.source)
-		if not isinstance(seq, SequenceResource):
-			raise base.ResourceQueryError('Can not load resources other than SequenceResource')
-		self.data = list(seq.getData())
-		self.cols = max([len(d) for d in self.data])
-		self.rows = len(self.data)
+
+	def size(self):
+		return (self.cols*self.fontsize, self.rows*self.fontsize)
+
+
+	def state(self):
+		s = super(SequenceResource, self).state()
+		s['len'] = self.len
+		s['fontsize'] = self.fontsize
+		s['rows'] = self.rows
+		s['columns'] = self.cols
+		s['source'] = self.source
+		s['format'] = self.format
+		return s
+
+
+	def api_load(self, source, format='fasta'):
+		if source.startswith("http://"):
+			try:
+				data = urllib2.urlopen(source, None).read()
+			except (urllib2.URLError, urllib2.HTTPError), e:
+				raise base.ResourceQueryError('Faild do open URI: %s' % source)
+			self.source = source
+			self.format = format
+		else:
+			raise base.ResourceQueryError('Unsupported protocol or uri syntax: %s' % uri)
+
+		try:
+			seq = SeqIO.parse(StringIO(data), self.format)
+		except Exception, e:
+			raise base.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
+		if not seq:
+			raise base.ResourceQueryError('No sequences found.')
+		for s in seq:
+			self.sequences.append(str(s.seq))
+			self.keys.append(s.id)
+		self.cols = max([len(s) for s in self.sequences])
+		self.rows = len(self.keys)
+		self.len = self.rows
 		self.touch()
-		return {'columns':self.cols, 'rows':self.rows}
+
 
 	def api_position(self, **options):
 		col = abs(int(options.get('column',0)))
 		row = abs(int(options.get('row',0)))
-		return {"x":self.fieldsize * col, "y":self.fieldsize * row}
+		return {"x":self.fontsize * col, "y":self.fontsize * row}
+
+	def api_keys(self):
+		return {"keys":self.keys}
+
 
 	def setfontoptions(self, context):
 		context.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
@@ -157,15 +127,16 @@ class SequenceView(base.BaseView):
 		#fo.set_hint_style(cairo.HINT_STYLE_NONE)
 		options.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
 		context.set_font_options(options)
-		context.set_font_size(self.fieldsize - 1)
+		context.set_font_size(self.fontsize - 1)
 		return context.font_extents()
-		
+
+
 	def render(self, context, x, y, w, h):
 		# Shortcuts
 		cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
 		c = context
-		fieldsize = self.fieldsize
-		fontsize = self.fieldsize - 1
+		fieldsize = self.fontsize
+		fontsize = self.fontsize - 1
 		cc = self.cols
 		rc = self.rows
 		color = self.color
@@ -176,10 +147,10 @@ class SequenceView(base.BaseView):
 
 		# Rows to consider
 		row_first = int(math.floor( float(cminy) / fieldsize))
-		row_last  = int(math.ceil(  float(cmaxy) / fieldsize))
+		row_last  = int(math.ceil(	float(cmaxy) / fieldsize))
 		row_last  = min(row_last, self.rows)
 		col_first = int(math.floor( float(cminx) / fieldsize))
-		col_last  = int(math.ceil(  float(cmaxx) / fieldsize))
+		col_last  = int(math.ceil(	float(cmaxx) / fieldsize))
 		#col_last  = min(col_last, self.cols)
 		
 		# Draw background
@@ -188,7 +159,7 @@ class SequenceView(base.BaseView):
 		# Draw data
 		for row in range(row_first, row_last):
 			try:
-				data = self.data[row][col_first:col_last].upper()
+				data = self.sequences[row][col_first:col_last].upper()
 			except IndexError:
 				data = ''
 			# Fill with dashes
@@ -204,7 +175,7 @@ class SequenceView(base.BaseView):
 				context.show_text(char)
 		return self
 
-base.register_plugin("SequenceView", SequenceView)
+base.register_plugin("Sequence", SequenceResource)
 
 
 
