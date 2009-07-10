@@ -1,6 +1,6 @@
 #!/usr/bin/env python
  
-from distutils.core import setup
+from setuptools import setup
 import lucullus
 
 setup(name='lucullus',
@@ -12,9 +12,9 @@ setup(name='lucullus',
       url='http://github.com/defnull/lucullus',
       packages=['lucullus','lucullus.plugins','lucullus.base'],
       scripts=['lucullus-serve'],
-      requires=['bottle (>=0.4.7)',
-                'pycairo (>=1.8.6)',
-                'paste (>=1.7.2)'],
+      install_requires=['bottle >= 0.4.7',
+                		'pycairo >= 1.8.6',
+                		'paste >= 1.7.2'],
       provides=['lucullus'],
       #license='MIT',
       classifiers=[
