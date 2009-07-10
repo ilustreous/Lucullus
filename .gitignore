@@ -1,2 +1,7 @@
 *.pyc
 ._*
+*DS_*
+MANIFEST
+build/
+dist/
+
