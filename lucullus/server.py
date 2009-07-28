@@ -1,4 +1,5 @@
 import bottle
+import sys
 from os.path import abspath, join, dirname, basename
 from lucullus import base
 from lucullus.base import config
@@ -11,6 +12,8 @@ import os
 import lucullus.plugins.seq
 import time
 import random
+
+bottle.debug(True)
 
 # create logger
 log = logging.getLogger("lucullus")
@@ -27,6 +30,7 @@ log.addHandler(ch)
 log.debug("Starting server")
 sessions = {}
 resource_path = abspath(join(dirname(__file__), './data'))
+bottle.TEMPLATE_PATH.insert(0,abspath(join(dirname(__file__), './views'))+'/%s.tpl')
 
 
 
@@ -67,7 +71,10 @@ def jsonify(action):
 	output it.
 	"""
 	def tojson(**kwargs):
-		data = action(**kwargs)
+		try:
+			data = action(**kwargs)
+		except Exception, e:
+			data = {'error':str(e)}
 		log.debug("Jsonify %s" % str(data))
 		bottle.response.content_type = 'application/json'
 		return simplejson.dumps(data)
@@ -220,93 +227,11 @@ def render(rid, x, y, w, h, f):
 
 @bottle.route('/')
 def index():
-	return '''<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-		"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-
-	<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-	<head>
-		<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-		<script src="./js/jquery.js" type="text/javascript"></script>
-		<script src="./js/jquery.query.js" type="text/javascript"></script>
-		<script src="./js/lucullus.js"	 type="text/javascript"></script>
-		<script src="./js/lucullus.seqgui.js"	type="text/javascript"></script>
-		<title>Lucullus</title>
-		<style type="text/css">
-			html {background-color:#fff}
-			#mySeqMap {background-color:#eee}
-		</style>
-	</head>
-	<body>
-		<div id="debug"></div>
-		<div id="seqgui">
-			<form class='upload' style="background: lightgrey;
-										border: 5px solid grey;
-										position: absolute; top:50%; left:50%;
-										height:100px; width:400px; padding:14px;
-										margin:-65px -215px;
-										-moz-border-radius: 10px 10px;
-										overflow:hidden">
-				<div style="font-weight: bold; border-bottom: 1px solid grey; margin-bottom:5px">Upload a fasta File</div>
-				<label for="upUrl">URL:</label> <input type="text" name="upUrl" style="width: 50%" /> <input type="submit" value="Upload"/><br />
-				<label for="format">Format:</label>
-				<select name="format">
-					<option value="fasta">Fasta</option>
-				</select>
-				<select name="pack">
-					<option value="none">Not compressed</option>
-					<option value="gz">gzip</option>
-					<option value="rar">rar</option>
-					<option value="zip">zip</option>
-				</select>
-				<div style="color:red" class="status"></div>
-			</form>
-			<table class="guitable" style="height:500px; width: 90%; margin: auto; border: 1px solid grey; border-spacing:0px; border-collapse:collapse">
-				<tr class="control" style="height:20px">
-					<td class="logo" style="width: 100px">logo</td>
-					<td class="ruler"></td>
-				</tr>
-				<tr class="compare" style="height:14px">
-					<td class="index" style="width: 100px"></td>
-					<td class="map"></td>
-				</tr>
-				<tr class="main">
-					<td class="index" style="width: 100px"></td>
-					<td class="map"></td>
-				</tr>
-				<tr class="status" style="height:20px">
-					<td colspan='2' class="text" style="border: 1px solid grey">Please activate JavaScript.</td>
-				</tr>
-			</table>
-	  </div>
-		<script type="text/javascript">
-		  /*<![CDATA[*/
-		var autoload = jQuery.query.get('upUrl')
-		var server = document.location.protocol + '//' + document.location.host + document.location.pathname + 'api'
-		var api
-		var gui
-
-		/* api calls are blocking. Never call them in main thread */
-		$(document).ready(function() {
-			api = new Lucullus.api(server, "test")
-			gui = new SeqGui(api, '#seqgui')
-		})
-
-		/*]]>*/</script>
-	</body>
-	</html>
-	'''
+	return bottle.template('seqgui')
 
 @bottle.route('/:filename:(js|css|test)/.+:')
 def static(filename):
 	bottle.send_file(filename=filename, root=resource_path + '/static_files')
-
-import sys, traceback
-@bottle.error(500)
-@bottle.error(403)
-def fuck(exception):
-	log.error(str(exception))
-	log.debug(traceback.format_exc())
-	return "Internal server error"
 
 def serve():
 	bottle.run(server=bottle.PasteServer, host='0.0.0.0', port=8080)

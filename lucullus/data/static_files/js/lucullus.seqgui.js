@@ -57,8 +57,15 @@ SeqGui.prototype.upload = function(file, format){
 		self.index = this.api.create("Index", {'fontsize':12})
     	self.ruler = this.api.create("Ruler", {'fontsize':12, 'steps':10})
     	self.sequence.keys().wait(function(c){
-    	    self.index.setup({'keys':c.result.keys})
+			self.names = c.result.keys
+    	    self.index.setup({'keys':self.names})
     	    self.index.wait(show_index)
+			jQuery.each(self.names, function(i,n){
+				jQuery('#seqjump',self.root).append(jQuery('<option value="'+n+'">'+n+'</option>'))
+			})
+			jQuery('#seqjump').change(function(e) {
+				self.jump_to(e.target.value)
+			})
     	})
 		self.ruler.wait(show_ruler)
 	}
@@ -88,4 +95,11 @@ SeqGui.prototype.upload = function(file, format){
 	self.sequence.wait(uploaded)
 }
 	
+SeqGui.prototype.jump_to = function(name) {
+	var height_per_index = this.index_map.get_datasize()[1] / this.names.length
+	var index = jQuery.inArray(name, this.names)
+	var focus = (index + 0.5) * height_per_index
+	var movement = focus - this.index_map.get_center()[1]
+	this.ml.scroll(0,-movement)
+}
 	

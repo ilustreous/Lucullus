@@ -447,13 +447,13 @@ Lucullus.ViewMap = function (element, view) {
 	this.clipping = [0,0,0,0]			// minimum and maximum pixel to show
 	this.manclipp = [-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE]			// minimum and maximum pixel as set by user
 	this.tilesize = [256,256]			// Size of a tile in pixel
-	this.offset = [0,0]					// Current offset
+	this.offset = [0,0]					// Current offset (negative position of the upper left corner relative to the data area)
 
 	this.map =  null
 	this.buffer = null
 
 	// Some caches for faster processing
-	this.mapsize = [0,0,0,0]			// Size of viewable area and map container (minx, miny, maxx, maxy)
+	this.mapsize = [0,0,0,0]			// Size of viewable area and map container (vw, vh, cw, ch)
 	this.mapoffset = [0,0]				// Position of map
 	this.bufferoffset = [0,0]			// Position of buffer
 	
@@ -585,6 +585,51 @@ Lucullus.ViewMap.prototype.move = function(dx, dy) {
 	return [dx, dy].slice()
 }
 
+Lucullus.ViewMap.prototype.scroll = function(x,y,step,speed) {
+	// Move smoothly
+	if(!step) var step = 0.2
+	if(!speed) var speed = 10
+	var obj = this
+	if(x == 0 && y == 0) return
+	m = this.move(Math.ceil(x*step), Math.ceil(y*step))
+	setTimeout(function() {obj.scroll(Math.floor(x*(1-step)), Math.floor(y*(1-step)), step, speed)}, speed)
+}
+
+Lucullus.ViewMap.prototype.get_size = function() {
+	/** Returns the width and height of the viwable area */
+	return [this.mapsize[0], this.mapsize[1]]
+}
+
+
+Lucullus.ViewMap.prototype.get_datasize = function() {
+	/** Returns the width and height of the data area */
+	return [this.clipping[2] - this.clipping[0], this.clipping[3] - this.clipping[1]]
+}
+
+Lucullus.ViewMap.prototype.get_position = function() {
+	/** returns the current position of the upper left corner relative to the data area */
+	return [- this.offset[0], - this.offset[1]]
+}
+
+Lucullus.ViewMap.prototype.set_position = function(x, y) {
+	/** Moves the map so that its upper left corner is at (x,y) in the data area coordinate system */
+	current = this.get_position()
+	return this.move(current[0] - x, current[1] - y)
+}
+
+Lucullus.ViewMap.prototype.get_center = function() {
+	/** returns the current focus (center) of the map */
+	x = this.get_position()[0] + this.get_size()[0] / 2
+	y = this.get_position()[1] + this.get_size()[1] / 2
+	return [x,y]
+}
+
+Lucullus.ViewMap.prototype.set_center = function(x, y) {
+	/** Moves the map so that its focus (center) is (x,y) */
+	current = this.get_center()
+	return this.move(current[0] - x, current[1] - y)
+}
+
 Lucullus.ViewMap.prototype.set_clipping = function(x,y,w,h) {
 	/** Sets the size of the mapping area and invokes a refresh.*/
 	this.manclipp = [x,y,x+w,y+h]
@@ -678,7 +723,7 @@ Lucullus.DragListener = function(element) {
  */
 Lucullus.MoveListenerFactory = function() {
 	this.listener	= []	// registred listener. ListenerObject, mode(0dead, 1linear, 2distance), scalex, scaley
-	this.maps 		= []	// egistred maps to move
+	this.maps 		= []	// registred maps to move
 	this.speed		= 50
 
 	var obj = this	// Used for events
@@ -735,7 +780,15 @@ Lucullus.MoveListenerFactory = function() {
 				map[0].move(x*map[1],y*map[2])
 			})
 		}
-		
+	}
+	
+	this.scroll = function(x, y, step, speed) {
+		// Move every connected map
+		if(x || y) {
+			jQuery.each(obj.maps, function(i, map) {
+				map[0].scroll(x*map[1],y*map[2], step, speed)
+			})
+		}
 	}
 
     this.interval = setTimeout(obj.tick, obj.speed);
