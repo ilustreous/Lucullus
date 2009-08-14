@@ -145,6 +145,21 @@ class SequenceResource(base.BaseView):
 		return {'matches':matches, 'count':len(self.keys)}
 
 
+	def api_posinfo(self, **options):
+		col = int(math.floor(float(options.get('x',0)) / self.fontsize))
+		row = int(math.floor(float(options.get('y',0)) / self.fontsize))
+		try:
+			key = self.keys[row]
+			seq = self.sequences[row]
+			val = len(self.sequences[row]) >= col and self.sequences[row][col] or '-'
+		except IndexError:
+			key = "None"
+			seq = ""
+			val = '-'
+		spos = min(col+1, len(seq)) - seq.count('-', 0, col+1)
+		return {"key":key, "seqpos":spos, "value":val}
+
+
 	def api_keys(self):
 		return {"keys":self.keys}
 

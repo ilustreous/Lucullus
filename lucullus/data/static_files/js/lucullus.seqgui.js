@@ -53,6 +53,10 @@ SeqGui.prototype.upload = function(file, format){
 		self.sequence_map = new Lucullus.ViewMap(node, self.sequence)
 		self.ml.addMap(self.sequence_map,1,1)
 		self.ml.addLinear(node,1,1)
+		self.sequence_map.node.dblclick(function(e) {
+			var p = self.sequence_map.get_position_by_absolute(e.pageX, e.pageY)
+			self.position_info(p[0], p[1])
+		})
 
 		self.index = this.api.create("Index", {'fontsize':12})
     	self.ruler = this.api.create("Ruler", {'fontsize':12, 'steps':10})
@@ -111,3 +115,15 @@ SeqGui.prototype.jump_to = function(name) {
 		}
 	})
 }
+
+SeqGui.prototype.position_info = function(x,y) {
+	var self = this
+	self.sequence.posinfo({'x':x, 'y':y}).wait(function(c) {
+		if(c.result.key) {
+			self.status("Sequence: "+c.result.key+" (Position: "+c.result.seqpos+", Value: "+c.result.value+")")
+		} else {
+			self.status("Sequence: None - Position: None")
+		}
+	})
+}
+

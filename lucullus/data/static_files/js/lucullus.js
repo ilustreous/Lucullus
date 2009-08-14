@@ -642,6 +642,12 @@ Lucullus.ViewMap.prototype.set_clipping = function(x,y,w,h) {
 	this.manclipp = [x,y,x+w,y+h]
 }
 
+Lucullus.ViewMap.prototype.get_position_by_absolute = function(x,y) {
+	/** Sets the size of the mapping area and invokes a refresh.*/
+	x = x - this.node.offset().left - this.offset[0]
+	y = y - this.node.offset().top - this.offset[1]
+	return [x,y].slice()
+}
 
 
 
