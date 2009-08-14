@@ -499,8 +499,8 @@ Lucullus.ViewMap.prototype.new_map = function () {
 		return
 	}
 	
-	this.node.width(this.node.parent().width()+'px')
-	this.node.height(this.node.parent().height()+'px')
+	this.node.width(this.node.parent().innerWidth()-1+'px')
+	this.node.height(this.node.parent().innerHeight()-1+'px')
 	var w = this.node.width()
 	var h = this.node.height()
 	this.mapsize = [w,h,0,0]
@@ -558,8 +558,7 @@ Lucullus.ViewMap.prototype.move = function(dx, dy) {
 	/* Moves the map (and buffer) by (dx,dy) pixel and returns the actual movement */
 
 	// Normalise movement (clipping)
-	dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + dx)) - this.offset[0]
-	dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + dy)) - this.offset[1]
+	[dx, dy] = this.normalise_move(dx, dy)
 
 	if(dx == 0 && dy == 0) {
 		return [0,0]
@@ -585,14 +584,22 @@ Lucullus.ViewMap.prototype.move = function(dx, dy) {
 	return [dx, dy].slice()
 }
 
+Lucullus.ViewMap.prototype.normalise_move = function(dx,dy) {
+	/* Normalizes a movement (clipping) */
+	dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + Math.round(dx))) - this.offset[0]
+	dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + Math.round(dy))) - this.offset[1]
+	return [dx, dy].slice()
+}
+
 Lucullus.ViewMap.prototype.scroll = function(x,y,step,speed) {
 	// Move smoothly
+	var obj = this
 	if(!step) var step = 0.2
 	if(!speed) var speed = 10
-	var obj = this
-	if(x == 0 && y == 0) return
-	m = this.move(Math.ceil(x*step), Math.ceil(y*step))
-	setTimeout(function() {obj.scroll(Math.floor(x*(1-step)), Math.floor(y*(1-step)), step, speed)}, speed)
+	var m = this.normalise_move(x, y)
+	if(m[0] == 0 && m[1] == 0) return
+	this.move(m[0]*step, m[1]*step)
+	setTimeout(function() {obj.scroll(m[0]*(1-step), m[1]*(1-step), step, speed)}, speed)
 }
 
 Lucullus.ViewMap.prototype.get_size = function() {

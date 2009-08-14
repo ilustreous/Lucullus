@@ -37,7 +37,7 @@
 			</select>
 			<div style="color:red" class="status"></div>
 		</form>
-		<table class="guitable" style="height:500px; width: 90%; margin: auto; border: 1px solid grey; border-spacing:0px; border-collapse:collapse">
+		<table class="guitable" style="height:500px; width:90%; margin: auto; border: 1px solid grey; border-spacing:0px; border-collapse:collapse">
 			<tr class="control" style="height:20px">
 				<td class="logo" style="width: 100px">logo</td>
 				<td class="ruler"></td>
@@ -54,8 +54,7 @@
 				<td colspan='2' class="text" style="border: 1px solid grey">Please activate JavaScript.</td>
 			</tr>
 		</table>
-		<select id='seqjump' name='seqjump'>
-		</select>
+		Suche: <input type='text' id='seqjump' name='seqjump' />
   </div>
 	<script type="text/javascript">
 	  /*<![CDATA[*/

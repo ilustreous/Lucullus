@@ -56,17 +56,16 @@ SeqGui.prototype.upload = function(file, format){
 
 		self.index = this.api.create("Index", {'fontsize':12})
     	self.ruler = this.api.create("Ruler", {'fontsize':12, 'steps':10})
-    	self.sequence.keys().wait(function(c){
-			self.names = c.result.keys
-    	    self.index.setup({'keys':self.names})
-    	    self.index.wait(show_index)
-			jQuery.each(self.names, function(i,n){
-				jQuery('#seqjump',self.root).append(jQuery('<option value="'+n+'">'+n+'</option>'))
-			})
-			jQuery('#seqjump').change(function(e) {
-				self.jump_to(e.target.value)
-			})
-    	})
+		self.index.wait( function(){
+    		self.sequence.keys().wait(function(c){
+				self.names = c.result.keys
+    	    	self.index.setup({'keys':self.names})
+    	    	self.index.wait(show_index)
+				jQuery('#seqjump').change(function(e) {
+					self.jump_to(e.target.value)
+				})
+    		})
+		})
 		self.ruler.wait(show_ruler)
 	}
 
@@ -96,10 +95,19 @@ SeqGui.prototype.upload = function(file, format){
 }
 	
 SeqGui.prototype.jump_to = function(name) {
-	var height_per_index = this.index_map.get_datasize()[1] / this.names.length
-	var index = jQuery.inArray(name, this.names)
-	var focus = (index + 0.5) * height_per_index
-	var movement = focus - this.index_map.get_center()[1]
-	this.ml.scroll(0,-movement)
+	var self = this
+	self.sequence.search({'query':name, 'limit':1}).wait(function(c) {
+		if(c.result.matches) {
+			if(c.result.matches.length > 0) {
+				var index = c.result.matches[0].index
+				var height_per_index = self.index_map.get_datasize()[1] / c.result.count
+				var focus = (index) * height_per_index
+				var movement = focus - self.index_map.get_center()[1]
+				self.ml.scroll(0, Math.floor(-movement))
+				jQuery('#seqjump').css('background-color','#eeffff')
+			} else {
+				jQuery('#seqjump').css('background-color','#ffeeee')
+			}
+		}
+	})
 }
-	

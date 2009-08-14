@@ -40,7 +40,8 @@ Sessions verschwinden. Connect entfaellt. Es gibt nur noch Resourcen und Views.
 Resourcen sind mutable Objekte die komplett gepickelt werden.
 Views sind das gleiche, haben aber eine render() methode.
 
-/api/create resource-type, apikey, **args 
+>>> /api/create type(resource), apikey, **args 
+<<< {"id": #, "state": {...}, "api": [list-of-api-functions]}
 Erschafft eine neue resource
 
 /api/r123456
@@ -154,6 +155,17 @@ def query(rid, query):
 	except base.ResourceError, e:
 		return {'id': rid, 'error': repr(e)}
 
+
+@bottle.route('/api/r:rid:[0-9]+:/help', method='GET')
+@bottle.route('/api/r:rid:[0-9]+:/help/:query:[a-z_]+:', method='GET')
+@jsonify
+def help(rid, query=None):
+	r = resources.get(int(rid),None)
+	if query:
+		api = [(a[4:], getattr(r, a).__doc__) for a in [query] if a.startswith('api_') and callable(getattr(r, a))]
+	else:
+		api = [(a[4:], getattr(r, a).__doc__) for a in dir(r) if a.startswith('api_') and callable(getattr(r, a))]
+	return {'api':api}
 
 @bottle.route('/api/r:rid:[0-9]+:')
 @jsonify

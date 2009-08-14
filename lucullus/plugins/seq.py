@@ -14,6 +14,7 @@ import os
 import sys
 import urllib2
 from StringIO import StringIO
+import fnmatch
 
 from lucullus import base
 from lucullus.base import renderer
@@ -115,6 +116,34 @@ class SequenceResource(base.BaseView):
 		col = abs(int(options.get('column',0)))
 		row = abs(int(options.get('row',0)))
 		return {"x":self.fontsize * col, "y":self.fontsize * row}
+
+
+	def api_search(self, **options):
+		''' Search for a sequence name.
+		    @param query Search string.
+		    @param limit Number of matches to return
+			@return matches List of matches {key:string, position:int}
+			@return count Total number of seuquces
+			
+		    Search string syntax:
+		      '*' matches everything
+		      '?' matches any single character
+		      '[seq]' matches any character in seq
+		      '[!seq]' matches any character not in seq
+		'''
+		q = options.get('query', 0)
+		limit = max(1, int(options.get('limit', 25)))
+		matches = []
+		for i in xrange(len(self.keys)):
+			key = self.keys[i]
+			if fnmatch.fnmatch(key.lower(), q.lower()):
+				matches.append({"name":key, "index":i+1})
+				if len(matches) == limit:
+					break
+		if not matches and not q.endswith("*"):
+			return self.api_search(query=q+'*', limit=limit)
+		return {'matches':matches, 'count':len(self.keys)}
+
 
 	def api_keys(self):
 		return {"keys":self.keys}
