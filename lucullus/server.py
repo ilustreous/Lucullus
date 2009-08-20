@@ -12,6 +12,7 @@ import os
 import lucullus.plugins.seq
 import time
 import random
+import traceback
 
 bottle.debug(True)
 
@@ -63,6 +64,13 @@ Rendert ein Bild
 apikeys = ['test']
 resources = bottle.db.resources
 
+def log_error(e):
+	err = "Exception: %s\n" % (repr(e))
+	err += "<h2>Traceback:</h2>\n<pre>\n"
+	err += traceback.format_exc(10)
+	err += "\n</pre>"
+	log.debug(err)
+	
 
 def jsonify(action):
 	""" Action Decorator that formats output for JSON
@@ -76,7 +84,8 @@ def jsonify(action):
 			data = action(**kwargs)
 		except Exception, e:
 			data = {'error':str(e)}
-		log.debug("Jsonify %s" % str(data))
+			log_error(e)
+		log.debug("Jsonify %s" % repr(data))
 		bottle.response.content_type = 'application/json'
 		return simplejson.dumps(data)
 	return tojson
@@ -241,7 +250,7 @@ def render(rid, x, y, w, h, f):
 def index():
 	return bottle.template('seqgui')
 
-@bottle.route('/:filename:(js|css|test)/.+:')
+@bottle.route('/:filename:(js|jquery|css|test)/.+:')
 def static(filename):
 	bottle.send_file(filename=filename, root=resource_path + '/static_files')
 

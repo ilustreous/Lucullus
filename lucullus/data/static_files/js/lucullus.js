@@ -302,7 +302,6 @@ Lucullus.Resource.prototype.update = function(dict) {
  * @return Call object (self)
  */
 Lucullus.Resource.prototype.wait = function(callback) {
-	
 	if(typeof callback == 'function') {
 		this.current.wait(callback)
 	}
@@ -432,56 +431,83 @@ Lucullus.Resource.prototype.query = function(action, options, callback) {
 
 
 
-Lucullus.ViewMap = function (element, view) {
+Lucullus.ViewMap = function (root, view) {
+	var self = this
+
 	/* Shows a view in an element using a movable tile map */
 	this.view = view
+	this.root = $(root)
 	this.node = $('<div></div>')
-	this.node.css('overflow','hidden')
-	this.node.css('position','relative')
-	this.node.css('width','100%')
-	this.node.css('height','100%')
-	$(element).empty()
-	$(element).append(this.node)
 
 	/* Default values */
 	this.clipping = [0,0,0,0]			// minimum and maximum pixel to show
 	this.manclipp = [-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE]			// minimum and maximum pixel as set by user
 	this.tilesize = [256,256]			// Size of a tile in pixel
-	this.offset = [0,0]					// Current offset (negative position of the upper left corner relative to the data area)
+	this.tiles    = [0,0]				// Number of tiles
+	this.offset   = [0,0]				// Current offset (negative position of the upper left corner relative to the data area)
 
 	this.map =  null
 	this.buffer = null
 
 	// Some caches for faster processing
-	this.mapsize = [0,0,0,0]			// Size of viewable area and map container (vw, vh, cw, ch)
+	this.mapsize = [0,0]				// Size of viewable area
 	this.mapoffset = [0,0]				// Position of map
 	this.bufferoffset = [0,0]			// Position of buffer
 	
 	this.refresh_speed = 500
 	this.refresh_interval = null
-
-	var obj = this
-	obj.refresh = function() {
-		/* Adds a new map whenever needed (call every second or so) */
-	    if(obj.mapoffset[0] > 0
-		|| obj.mapoffset[0] + obj.mapsize[2] < obj.mapsize[0]
-		|| obj.mapoffset[1] > 0
-		|| obj.mapoffset[1] + obj.mapsize[3] < obj.mapsize[1] )
-			obj.new_map()
-
-		obj.refresh_interval = setTimeout(obj.refresh, obj.refresh_speed)
-	    return
-	}
-
-	this.view.wait(function(c) {
-		obj.new_map()
-		obj.refresh()
-	})
+	this.overlap = 0
 	
+	// Setup
+	this.node.css('overflow','hidden')
+	this.node.css('position','relative')
+	this.node.width(this.root.innerWidth())
+	this.node.height(this.root.innerHeight())
+	this.root.empty()
+	this.root.append(this.node)
+	this.root.bind('resize', function(e) {
+		self.on_resize()
+	})
+
+	// Start refresh loop when ready.
+	this.view.wait(function() {
+		self.on_resize()
+		self.refresh()
+		self._refresh()
+	})
 }
 
+Lucullus.ViewMap.prototype.on_resize = function() {
+	// Called when parent element resized
+	this.node.width(this.root.innerWidth())
+	this.node.height(this.root.innerHeight())
+	var w = this.node.width()
+	var h = this.node.height()
+	var tiles_x = Math.ceil(w / this.tilesize[0] ) + 1 + this.overlap * 2
+	var tiles_y = Math.ceil(h / this.tilesize[1] ) + 1 + this.overlap * 2
+	this.mapsize = [w, h]
+	this.tiles = [tiles_x, tiles_y]
+}
 
-Lucullus.ViewMap.prototype.new_map = function () {
+Lucullus.ViewMap.prototype._refresh = function() {
+	/* Adds a new map whenever needed (call every second or so) */
+	if(this.mapoffset[0] > 0
+	|| this.mapoffset[0] + this.tiles[0]*this.tilesize[0] < this.mapsize[0]
+	|| this.mapoffset[1] > 0
+	|| this.mapoffset[1] + this.tiles[1]*this.tilesize[1] < this.mapsize[1] ) {
+        this.refresh()
+	}
+
+	var self = this
+	this.refresh_interval = setTimeout(function(){self._refresh()}, this.refresh_speed)
+    return
+}
+
+Lucullus.ViewMap.prototype.refresh = function () {
+	var self = this
+	// If the map is not visible, we don't have to do anything
+	if(this.mapsize[0] == 0 || this.mapsize[1] == 0) return
+	// React on changed view parameter
 	if(this.view && !this.view.error && this.view.width && this.view.height && this.view.offset) {
 		var width = this.view.width
 		var height = this.view.height
@@ -491,28 +517,17 @@ Lucullus.ViewMap.prototype.new_map = function () {
 		this.clipping[1] = Math.max(oy, this.manclipp[1])
 		this.clipping[2] = Math.min(width+ox, this.manclipp[2])
 		this.clipping[3] = Math.min(height+oy, this.manclipp[3])
-		var obj = this
-		obj.imgurl = function(numberx, numbery, sizex, sizey) {
-			return obj.view.api.server + '/r' + obj.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png'
+		this.imgurl = function(numberx, numbery, sizex, sizey) {
+			return self.view.api.server + '/r' + self.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png'
 		}
 	} else {
+		this.node.empty()
 		return
 	}
 	
-	this.node.width(this.node.parent().innerWidth()-1+'px')
-	this.node.height(this.node.parent().innerHeight()-1+'px')
-	var w = this.node.width()
-	var h = this.node.height()
-	this.mapsize = [w,h,0,0]
-	if(h == 0 || w == 0) return
-	// Number of tiles that fit into that area (+1 for a spare tile in every direction)
-	var overlap = 0 // Spare tiles in every direction (mor tiles, fewer refreshes)
-	var tiles_x = Math.ceil(w / this.tilesize[0] ) + 1 + overlap * 2
-	var tiles_y = Math.ceil(h / this.tilesize[1] ) + 1 + overlap * 2
-	this.mapsize = [w,h, tiles_x*this.tilesize[0], tiles_y*this.tilesize[1]]
 	// Index number of top left tile
-	var nx = Math.floor(-this.offset[0] / this.tilesize[0])-overlap
-	var ny = Math.floor(-this.offset[1] / this.tilesize[1])-overlap
+	var nx = Math.floor(-this.offset[0] / this.tilesize[0]) - this.overlap
+	var ny = Math.floor(-this.offset[1] / this.tilesize[1]) - this.overlap
 	// Total offset of top left tile
 	var ox = nx * this.tilesize[0] 
 	var oy = ny * this.tilesize[1] 
@@ -520,20 +535,27 @@ Lucullus.ViewMap.prototype.new_map = function () {
 	var vox = ox+this.offset[0]
 	var voy = oy+this.offset[1]
 
-	if(this.buffer)
+	if(this.buffer) {
 		this.buffer.remove()
-	this.buffer = this.map
-	this.bufferoffset = this.mapoffset
-	this.map = $('<div style="position:absolute; left:'+vox+'px; top:'+voy+'px; width:'+(tiles_x * this.tilesize[0])+'px; height:'+(tiles_y * this.tilesize[1])+'px">Loading...</div>')
+	}
+
+	if(this.map){
+		this.buffer = this.map
+		this.bufferoffset = this.mapoffset
+	}
+
+	this.map = $('<div style="position:absolute; left:'+vox+'px; top:'+voy+'px; width:'+(this.mapsize[0])+'px; height:'+(this.mapsize[1])+'px">Loading...</div>')
 	this.mapoffset = [vox, voy]
-	this.map.html(this.imagetiles(nx, ny, tiles_x, tiles_y))
+	this.map.html(this.imagetiles(nx, ny))
 	this.node.append(this.map)
 }
 
-Lucullus.ViewMap.prototype.imagetiles = function(nx, ny, cx, cy) {
+Lucullus.ViewMap.prototype.imagetiles = function(nx, ny) {
 	/* Fills the current map with images using (nx,ny) as number of top left tile and (cx,cy) as number of tiles to show */
 	var tx = this.tilesize[0]
 	var ty = this.tilesize[1]
+	var cx = this.tiles[0]
+	var cy = this.tiles[1]
 	var images = []
 	for(var y=0; y<cy; y++) {
 		for(var x=0; x<cx; x++) {
@@ -553,10 +575,22 @@ Lucullus.ViewMap.prototype.imagetiles = function(nx, ny, cx, cy) {
 	}
 	return images.join("\n")
 }
-	
+
+Lucullus.ViewMap.prototype.set_clipping = function(x,y,w,h) {
+	/** Sets the size of the mapping area and invokes a refresh.*/
+	this.manclipp = [x,y,x+w,y+h]
+}
+
+Lucullus.ViewMap.prototype.normalise_move = function(dx,dy) {
+	/* Normalizes a movement (clipping) */
+	dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + Math.round(dx))) - this.offset[0]
+	dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + Math.round(dy))) - this.offset[1]
+	return [dx, dy].slice()
+}
+
 Lucullus.ViewMap.prototype.move = function(dx, dy) {
 	/* Moves the map (and buffer) by (dx,dy) pixel and returns the actual movement */
-
+	if(!this.map) return
 	// Normalise movement (clipping)
 	[dx, dy] = this.normalise_move(dx, dy)
 
@@ -584,13 +618,6 @@ Lucullus.ViewMap.prototype.move = function(dx, dy) {
 	return [dx, dy].slice()
 }
 
-Lucullus.ViewMap.prototype.normalise_move = function(dx,dy) {
-	/* Normalizes a movement (clipping) */
-	dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + Math.round(dx))) - this.offset[0]
-	dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + Math.round(dy))) - this.offset[1]
-	return [dx, dy].slice()
-}
-
 Lucullus.ViewMap.prototype.scroll = function(x,y,step,speed) {
 	// Move smoothly
 	var obj = this
@@ -602,11 +629,29 @@ Lucullus.ViewMap.prototype.scroll = function(x,y,step,speed) {
 	setTimeout(function() {obj.scroll(m[0]*(1-step), m[1]*(1-step), step, speed)}, speed)
 }
 
+Lucullus.ViewMap.prototype.move_to = function(x,y) {
+	// Move to a fixed position
+	if(x==null) x = this.offset[0]
+	if(y==null) y = this.offset[1]
+	var dx = x - this.offset[0]
+	var dy = y - this.offset[1]
+	this.move(dx, dy)
+	return self.offset.slice()
+}
+
+Lucullus.ViewMap.prototype.scroll_to = function(x,y,step,speed) {
+	// scroll to a fixed position
+	if(x==null) x = this.offset[0]
+	if(y==null) y = this.offset[1]
+	var dx = x - this.offset[0]
+	var dy = y - this.offset[1]
+	this.scroll(dx, dy, step, speed)
+}
+
 Lucullus.ViewMap.prototype.get_size = function() {
 	/** Returns the width and height of the viwable area */
 	return [this.mapsize[0], this.mapsize[1]]
 }
-
 
 Lucullus.ViewMap.prototype.get_datasize = function() {
 	/** Returns the width and height of the data area */
@@ -618,28 +663,11 @@ Lucullus.ViewMap.prototype.get_position = function() {
 	return [- this.offset[0], - this.offset[1]]
 }
 
-Lucullus.ViewMap.prototype.set_position = function(x, y) {
-	/** Moves the map so that its upper left corner is at (x,y) in the data area coordinate system */
-	current = this.get_position()
-	return this.move(current[0] - x, current[1] - y)
-}
-
 Lucullus.ViewMap.prototype.get_center = function() {
 	/** returns the current focus (center) of the map */
 	x = this.get_position()[0] + this.get_size()[0] / 2
 	y = this.get_position()[1] + this.get_size()[1] / 2
 	return [x,y]
-}
-
-Lucullus.ViewMap.prototype.set_center = function(x, y) {
-	/** Moves the map so that its focus (center) is (x,y) */
-	current = this.get_center()
-	return this.move(current[0] - x, current[1] - y)
-}
-
-Lucullus.ViewMap.prototype.set_clipping = function(x,y,w,h) {
-	/** Sets the size of the mapping area and invokes a refresh.*/
-	this.manclipp = [x,y,x+w,y+h]
 }
 
 Lucullus.ViewMap.prototype.get_position_by_absolute = function(x,y) {
@@ -788,20 +816,36 @@ Lucullus.MoveListenerFactory = function() {
 	
 	this.move = function(x, y) {
 		// Move every connected map
-		if(x || y) {
-			jQuery.each(obj.maps, function(i, map) {
-				map[0].move(x*map[1],y*map[2])
-			})
-		}
+		jQuery.each(obj.maps, function(i, map) {
+			map[0].move(x*map[1],y*map[2])
+		})
 	}
 	
 	this.scroll = function(x, y, step, speed) {
 		// Move every connected map
-		if(x || y) {
-			jQuery.each(obj.maps, function(i, map) {
-				map[0].scroll(x*map[1],y*map[2], step, speed)
-			})
-		}
+		jQuery.each(obj.maps, function(i, map) {
+			map[0].scroll(x*map[1],y*map[2], step, speed)
+		})
+	}
+	
+	this.move_to = function(x, y) {
+		jQuery.each(obj.maps, function(i, map) {
+			var ix = x
+			var iy = y
+			if(ix) ix *= map[1]
+			if(iy) iy *= map[2]
+			map[0].move_to(ix,iy)
+		})
+	}
+
+	this.scroll_to = function(x, y) {
+		jQuery.each(obj.maps, function(i, map) {
+			var ix = x
+			var iy = y
+			if(ix) ix *= map[1]
+			if(iy) iy *= map[2]
+			map[0].scroll_to(ix,iy)
+		})
 	}
 
     this.interval = setTimeout(obj.tick, obj.speed);

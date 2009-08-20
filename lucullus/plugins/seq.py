@@ -32,6 +32,7 @@ class SequenceResource(base.BaseView):
 		self.source = None
 		self.format = 'fasta'
 		self.fontsize = 12
+		self.len = 0
 		self.color = {}
 		self.color['*'] = renderer.hexcolor('#000000FF')
 		self.color['-'] = renderer.hexcolor('#999999FF')
@@ -95,7 +96,7 @@ class SequenceResource(base.BaseView):
 			self.source = source
 			self.format = format
 		else:
-			raise base.ResourceQueryError('Unsupported protocol or uri syntax: %s' % uri)
+			raise base.ResourceQueryError('Unsupported protocol or uri syntax: %s' % source)
 
 		try:
 			seq = SeqIO.parse(StringIO(data), self.format)
