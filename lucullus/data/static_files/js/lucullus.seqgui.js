@@ -87,6 +87,12 @@ function SeqGui(api, root) {
 			self.status("Slide to: " + ui.value +"/"+self.eSeqMap.view.columns)
 		}
 	})
+	this.eSeqMap.cMove = function() { 
+		if(self.eSeqMap && self.eSeqMap.get_datasize()[0]) {
+			var pos = self.eSeqMap.view.columns * (self.eSeqMap.get_position()[0] / (self.eSeqMap.get_datasize()[0] - self.eSeqMap.get_size()[0]))
+			self.eSlider.slider('value', pos)
+		}	
+	}
 	this.nSearch.find('form').bind('submit', function(e) {
 		self.jump_to(self.nSearch.find('input[name="q"]').val())
 		return false
@@ -108,7 +114,6 @@ function SeqGui(api, root) {
 		var p = self.eSeqMap.get_position_by_absolute(e.pageX, e.pageY)
 		self.position_info(p[0], p[1])
 	})
-
 	this.status('Waiting for file upload...')
 	this.open_upload_dialog()
 }
@@ -163,7 +168,7 @@ SeqGui.prototype.upload = function(file, format){
 			}
 			self.eSeqMap.refresh()
 			self.eSlider.slider('option', 'max', self.eSeqMap.view.columns)
-			self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_size()[0], self.lRulerHeight)
+			self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_datasize()[0], self.lRulerHeight)
 			self.status('Parsing complete. Number of sequences: '+self.eSeqMap.view.len)
 			self.close_upload_dialog()
 			self.eSeqMap.view.keys().wait(function(c){
@@ -200,11 +205,8 @@ SeqGui.prototype.jump_to = function(name) {
 }
 
 SeqGui.prototype.slide_to = function(pos) {
-	pos = pos / this.eSeqMap.view.columns
-	var width = this.eSeqMap.get_size()[0]
-	var target = (this.eSeqMap.get_datasize()[0]) * pos - width / 2
-	alert(target)
-	alert(this.eSeqMap.get_datasize()[0])
+	// new_position = (data_size - window_size) * (jump_to_column / num_columns)
+	var target = (this.eSeqMap.get_datasize()[0] - this.eSeqMap.get_size()[0]) * pos / this.eSeqMap.view.columns
 	this.ml.scroll_to(Math.floor(-target), null)
 }
 
