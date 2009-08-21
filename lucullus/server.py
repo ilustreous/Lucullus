@@ -62,7 +62,16 @@ Rendert ein Bild
 """
 
 apikeys = ['test']
-resources = bottle.db.resources
+resources = {}
+
+def cleanup():
+	for rid in resources.keys():
+		try:
+			if resources[rid].atime < time.time() - 60*60:
+				del resources[rid]
+				log.debug("Deleted resource %s after one hour." % rid)
+		except KeyError:
+			pass
 
 def log_error(e):
 	err = "Exception: %s\n" % (repr(e))
@@ -85,16 +94,15 @@ def jsonify(action):
 		except Exception, e:
 			data = {'error':str(e)}
 			log_error(e)
-		log.debug("Jsonify %s" % repr(data))
 		bottle.response.content_type = 'application/json'
 		return simplejson.dumps(data)
 	return tojson
 
 
-
 @bottle.route('/api/create', method="POST")
 @jsonify
 def create():
+	cleanup()
 	log.debug(repr(bottle.request.params))
 	log.debug(repr(bottle.request.params['apikey']))
 	apikey = bottle.request.params.get('apikey','')
@@ -111,9 +119,12 @@ def create():
 	r = lucullus.base.plugins[r_type]()
 	r.configure(**options)
 	r.touch()
-	resources[id(r)] = r
+	rid = str(id(r))
+	while rid in resources:
+		rid = str(int(rid)+1)
+	resources[rid] = r
 	api = [a[4:] for a in dir(r) if a.startswith('api_') and callable(getattr(r, a))]
-	return {"id": str(id(r)), "state": r.state(), "api": api}
+	return {"id": rid, "state": r.state(), "api": api}
 
 
 @bottle.route('/api/r:rid:[0-9]+:/setup', method='POST')
@@ -121,7 +132,7 @@ def create():
 def configure(rid):
 	""" Accesses the resource configuration and functions """
 	apikey = bottle.request.params.get('apikey','')
-	r = resources.get(int(rid),None)
+	r = resources.get(rid,None)
 
 	if not r:
 		bottle.abort(404, 'Resource not found')
@@ -144,7 +155,7 @@ def configure(rid):
 def query(rid, query):
 	""" Accesses the resource configuration and functions """
 	apikey = bottle.request.params.get('apikey','')
-	r = resources.get(int(rid),None)
+	r = resources.get(rid,None)
 
 	if not r:
 		bottle.abort(404, 'Resource not found')
@@ -169,7 +180,7 @@ def query(rid, query):
 @bottle.route('/api/r:rid:[0-9]+:/help/:query:[a-z_]+:', method='GET')
 @jsonify
 def help(rid, query=None):
-	r = resources.get(int(rid),None)
+	r = resources.get(rid,None)
 	if query:
 		api = [(a[4:], getattr(r, a).__doc__) for a in [query] if a.startswith('api_') and callable(getattr(r, a))]
 	else:
@@ -179,7 +190,7 @@ def help(rid, query=None):
 @bottle.route('/api/r:rid:[0-9]+:')
 @jsonify
 def info(rid):
-	r = resources.get(int(rid),None)
+	r = resources.get(rid,None)
 	if not r:
 		bottle.abort(404, 'Resource not found')
 	return {"id": rid, "state": r.state()}
@@ -188,7 +199,7 @@ def info(rid):
 @bottle.route('/api/r:rid:[0-9]+:/x:x:[0-9]+:y:y:[0-9]+:w:w:[0-9]+:h:h:[0-9]+:\.:f:(png):')
 def render(rid, x, y, w, h, f):
 	import rfc822
-	r = resources.get(int(rid),None)
+	r = resources.get(rid,None)
 	if not r:
 		bottle.abort(404, 'Resource not found')
 
