@@ -68,7 +68,7 @@ function SeqGui(api, root) {
 	this.eIndex2Map = new Lucullus.ViewMap(this.nIndex2,
 		this.api.create('Index', {'fontsize': this.lZoom}))
 	this.eRulerMap = new Lucullus.ViewMap(this.nRuler,
-		this.api.create('Ruler', {'fontsize':this.lZoom, 'steps':10}))
+		this.api.create('Ruler', {'fontsize':Math.floor(this.lZoom*0.8), 'step':this.lZoom}))
 	this.eUpload = this.nUpload.dialog({ autoOpen: false, width: this.nUpload.width() })
 	this.nUpload.find('form').bind('submit', function(e) {
 		self.lock_upload_dialog()
@@ -79,11 +79,12 @@ function SeqGui(api, root) {
 		return false
 	})
 	this.eSlider = this.nSlider.slider({
-		min:0, max:100000, stop: function(e, ui) {
-			self.slide_to(ui.value/100000, null)
+		min:0, max:0,
+		stop: function(e, ui) {
+			self.slide_to(ui.value, null)
 		},
 		slide: function(e, ui) {
-			self.status("Slide to: " + Math.floor(self.sequence.columns * ui.value/100000) +"/"+self.sequence.columns)
+			self.status("Slide to: " + ui.value +"/"+self.eSeqMap.view.columns)
 		}
 	})
 	this.nSearch.find('form').bind('submit', function(e) {
@@ -107,9 +108,6 @@ function SeqGui(api, root) {
 		var p = self.eSeqMap.get_position_by_absolute(e.pageX, e.pageY)
 		self.position_info(p[0], p[1])
 	})
-
-
-
 
 	this.status('Waiting for file upload...')
 	this.open_upload_dialog()
@@ -160,9 +158,12 @@ SeqGui.prototype.upload = function(file, format){
 			if(c.error) {
 				self.status('Upload failed: '+self.eSeqMap.view.error.message)
 				self.open_upload_dialog()
+				self.eSeqMap.view.recover()
 				return
 			}
 			self.eSeqMap.refresh()
+			self.eSlider.slider('option', 'max', self.eSeqMap.view.columns)
+			self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_size()[0], self.lRulerHeight)
 			self.status('Parsing complete. Number of sequences: '+self.eSeqMap.view.len)
 			self.close_upload_dialog()
 			self.eSeqMap.view.keys().wait(function(c){
@@ -199,10 +200,12 @@ SeqGui.prototype.jump_to = function(name) {
 }
 
 SeqGui.prototype.slide_to = function(pos) {
-	var self = this
-	var width = self.sequence_map.get_size()[0]
-	var target = (self.sequence_map.get_datasize()[0] - width) * pos
-	self.ml.scroll_to(Math.floor(-target), null)
+	pos = pos / this.eSeqMap.view.columns
+	var width = this.eSeqMap.get_size()[0]
+	var target = (this.eSeqMap.get_datasize()[0]) * pos - width / 2
+	alert(target)
+	alert(this.eSeqMap.get_datasize()[0])
+	this.ml.scroll_to(Math.floor(-target), null)
 }
 
 SeqGui.prototype.position_info = function(x,y) {

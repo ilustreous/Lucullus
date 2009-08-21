@@ -332,6 +332,7 @@ Lucullus.Resource.prototype.onerror = function(callback) {
  * @return Call object with $this attached to $call.resource ad $this.api attached to $call.api
  */
 Lucullus.Resource.prototype.setup = function(options, callback) {
+	if(this.error) return this.current
 	var self = this
 	var url = this.api.server + '/r' + this.id + '/setup'
 	if(!options) var options = {}
@@ -368,8 +369,9 @@ Lucullus.Resource.prototype.setup = function(options, callback) {
 }
 
 
-
-
+Lucullus.Resource.prototype.recover = function() {
+	this.error = null
+}
 
 
 /**
@@ -381,6 +383,7 @@ Lucullus.Resource.prototype.setup = function(options, callback) {
  * @return Call object with $this attached to $call.resource ad $this.api attached to $call.api
  */
 Lucullus.Resource.prototype.query = function(action, options, callback) {
+	if(this.error) return this.current
 	var self = this
 	var url = this.api.server + '/r' + this.id + '/' + action
 	if(!options) var options = {}
@@ -649,7 +652,7 @@ Lucullus.ViewMap.prototype.scroll_to = function(x,y,step,speed) {
 }
 
 Lucullus.ViewMap.prototype.get_size = function() {
-	/** Returns the width and height of the viwable area */
+	/** Returns the width and height of the viewable area */
 	return [this.mapsize[0], this.mapsize[1]]
 }
 
