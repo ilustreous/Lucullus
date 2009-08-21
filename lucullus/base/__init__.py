@@ -209,7 +209,7 @@ class RulerView(BaseView):
 		self.color = {}
 		self.color['fontcolor'] = hexcolor('#000000FF')
 
-	def api_set(self, **options):
+	def configure(self, **options):
 		self.step		= int(options.get('step', self.step))
 		self.marks		= int(options.get('marks', self.marks))
 		self.digits		= int(options.get('digits', self.digits))
