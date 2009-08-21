@@ -551,6 +551,8 @@ Lucullus.ViewMap.prototype.refresh = function () {
 	this.mapoffset = [vox, voy]
 	this.map.html(this.imagetiles(nx, ny))
 	this.node.append(this.map)
+	
+	if(this.cRefresh) this.cRefresh()
 }
 
 Lucullus.ViewMap.prototype.imagetiles = function(nx, ny) {
@@ -617,7 +619,7 @@ Lucullus.ViewMap.prototype.move = function(dx, dy) {
 		this.bufferoffset[1] += dy
 		this.buffer.css({'left': this.bufferoffset[0] + 'px', 'top': this.bufferoffset[1] + 'px'})
 	}
-
+	if(this.cMove) this.cMove(dx,dy)
 	return [dx, dy].slice()
 }
 
@@ -812,7 +814,8 @@ Lucullus.MoveListenerFactory = function() {
 				y += dis[1] * scale[1]
 			}
 		})
-		obj.move(x,y)
+		
+		if(x||y) obj.move(x,y)
 		// Do it again and again and ...
 	    obj.interval = setTimeout(obj.tick, obj.speed);
 	}
