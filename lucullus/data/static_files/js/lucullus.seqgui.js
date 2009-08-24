@@ -41,19 +41,14 @@ function SeqGui(api, root) {
 	this.nUpload.hide()
 
 	// Clean up and null out everythng
-	this.nTable.css('padding','').css('border','0')
+	this.nTable.css('padding','').css('border-spacing','0px')	
 	this.nTable.find('td').empty()
 	this.nTable.find('tr,td')
 		.css('width','')
 		.css('height','')
-		.css('padding','')
-		.css('border','0')
-
-	// Absolutize table size and recalculate column/row sizes
-	this.nTable.width(this.nTable.width())
-	this.nTable.height(this.nTable.height())
-	this.nTable.bind('resize', function(){self.on_resize()})
-	this.on_resize()
+		.css('padding','0')
+		.css('margin','0')
+		.css('border','1px solid grey')
 
 	// GUI elements (init, prepare and setup)
 	this.eStatus = this.nStatus
@@ -98,6 +93,11 @@ function SeqGui(api, root) {
 		return false
 	})
 
+
+	// Absolutize table size and recalculate column/row sizes
+	this.resize(this.nTable.width(), this.nTable.height())
+
+
 	this.status('Adding mouse gestures...')
 	// Move and dblclick listener
 	this.ml.addMap(this.eSeqMap,1,1)
@@ -116,6 +116,7 @@ function SeqGui(api, root) {
 	})
 	this.status('Waiting for file upload...')
 	this.open_upload_dialog()
+
 }
 
 
@@ -123,17 +124,29 @@ SeqGui.prototype.status = function(txt) {
 	this.eStatus.text(txt)
 }
 
-SeqGui.prototype.on_resize = function() {
+SeqGui.prototype.resize = function(sw, sh) {
+    // Firefox bug...
+	this.nTable.css('border-collapse','separate').css('border-collapse','collapse')
 	// Wether the table element resizes
 	var ch = this.lZoom
-	var w = this.nTable.width()
-	var h = this.nTable.height()
 	if(!this.sShowCompare) ch = 0
+	if(this.eSeqMap) {
+    	this.eRulerMap.resize(sw-this.lIndexWidth, this.lRulerHeight)
+    	this.eSeqMap.resize(sw-this.lIndexWidth, sh-ch-this.lRulerHeight)
+    	this.eIndexMap.resize(this.lIndexWidth, sh-ch-this.lRulerHeight)
+    	this.eSeq2Map.resize(sw-this.lIndexWidth, ch)
+    	this.eIndex2Map.resize(this.lIndexWidth, ch)
+    }
+	this.nTable.width(sw)
+	this.nTable.height(sh)
+
+	/*
 	this.nTable.find('tr td:nth-child(1)').width(this.lIndexWidth) // index/logo width
-	this.nTable.find('tr td:nth-child(2)').width(w-this.lIndexWidth) // ruler/map width
+	this.nTable.find('tr td:nth-child(2)').width(sw-this.lIndexWidth) // ruler/map width
 	this.nTable.find('tr:nth-child(1) td').height(this.lRulerHeight) // ruler/logo height
 	this.nTable.find('tr:nth-child(2) td').height(ch) // compare height
-	this.nTable.find('tr:nth-child(3) td').height(h-this.lRulerHeight-ch) // main height
+	this.nTable.find('tr:nth-child(3) td').height(sh-ch-this.lRulerHeight-ch) // main height
+	*/
 }
 
 SeqGui.prototype.open_upload_dialog = function(txt) {
@@ -187,7 +200,7 @@ SeqGui.prototype.upload = function(file, format){
 	
 SeqGui.prototype.jump_to = function(name) {
 	var self = this
-	self.sequence.search({'query':name, 'limit':1}).wait(function(c) {
+	self.eSeqMap.view.search({'query':name, 'limit':1}).wait(function(c) {
 		if(c.result.matches) {
 			if(c.result.matches.length > 0) {
 				var index = c.result.matches[0].index
@@ -212,7 +225,7 @@ SeqGui.prototype.slide_to = function(pos) {
 
 SeqGui.prototype.position_info = function(x,y) {
 	var self = this
-	self.sequence.posinfo({'x':x, 'y':y}).wait(function(c) {
+	self.eSeqMap.view.posinfo({'x':x, 'y':y}).wait(function(c) {
 		if(c.result.key) {
 			self.status("Sequence: "+c.result.key+" (Position: "+c.result.seqpos+", Value: "+c.result.value+")")
 		} else {

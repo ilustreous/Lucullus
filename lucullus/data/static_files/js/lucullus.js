@@ -464,32 +464,26 @@ Lucullus.ViewMap = function (root, view) {
 	// Setup
 	this.node.css('overflow','hidden')
 	this.node.css('position','relative')
-	this.node.width(this.root.innerWidth())
-	this.node.height(this.root.innerHeight())
+	this.resize(this.root.innerWidth(), this.root.innerHeight())
 	this.root.empty()
 	this.root.append(this.node)
-	this.root.bind('resize', function(e) {
-		self.on_resize()
-	})
 
 	// Start refresh loop when ready.
 	this.view.wait(function() {
-		self.on_resize()
 		self.refresh()
 		self._refresh()
 	})
 }
 
-Lucullus.ViewMap.prototype.on_resize = function() {
-	// Called when parent element resized
-	this.node.width(this.root.innerWidth())
-	this.node.height(this.root.innerHeight())
-	var w = this.node.width()
-	var h = this.node.height()
+Lucullus.ViewMap.prototype.resize = function(w, h) {
+	// Resizes the map node
+	this.node.width(w)
+	this.node.height(h)
 	var tiles_x = Math.ceil(w / this.tilesize[0] ) + 1 + this.overlap * 2
 	var tiles_y = Math.ceil(h / this.tilesize[1] ) + 1 + this.overlap * 2
 	this.mapsize = [w, h]
 	this.tiles = [tiles_x, tiles_y]
+	this.refresh()
 }
 
 Lucullus.ViewMap.prototype._refresh = function() {

@@ -1,2 +1,3 @@
-graft lucullus/public
+graft lucullus/data
+graft lucullus/views
 global-exclude ._*

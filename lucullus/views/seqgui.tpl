@@ -33,21 +33,22 @@
 				<div class="status"></div>
 			</form>
 		</div>
-		
-		<table class="guitable" style="height:500px; width:100%; margin: auto; border: 1px solid grey; border-spacing:0px; border-collapse:collapse">
-			<tr class="control" style="height:20px">
-				<td class="logo" style="width: 100px">logo</td>
+		<div class='resize' style='width: 800px; height: 500px;'>
+		<table class="guitable" style="height:100%; width:100%;">
+			<tr class="control">
+				<td class="logo"></td>
 				<td class="ruler"></td>
 			</tr>
-			<tr class="compare" style="height:14px">
-				<td class="index" style="width: 100px"></td>
+			<tr class="compare">
+				<td class="index"></td>
 				<td class="map"></td>
 			</tr>
 			<tr class="main">
-				<td class="index" style="width: 100px"></td>
+				<td class="index"></td>
 				<td class="map"></td>
 			</tr>
 		</table>
+		</div>
 		<div class="status">Please activate JavaScript.</div>
 		<div class="slider"></div>
 		<form class='search'>Suche: <input type='text' name='q' /></form>
@@ -60,6 +61,7 @@
 	var gui
 		/* api calls are blocking. Never call them in main thread */
 	$(document).ready(function() {
+		if(autoload) $('input[name="upUrl"]').val(autoload)
 		api = new Lucullus.api(server, "test")
 		gui = new SeqGui(api, '#seqgui')
 	})
