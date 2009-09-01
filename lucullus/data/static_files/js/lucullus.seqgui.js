@@ -79,7 +79,7 @@ SeqGui.prototype.on_resize = function(w, h) {
     x -= this.nDialog.css('padding-left').replace('px','')
     x -= this.nDialog.css('padding-right').replace('px','')
     var y = this.nDialog.innerHeight()
-    y -= this.nTabs.find('ul:first').outerHeight(true)
+    y -= this.nTabs.outerHeight(true)
     y -= this.nDialog.css('padding-top').replace('px','')
     y -= this.nDialog.css('padding-bottom').replace('px','')
     y -= this.nDialog.css('pading-top').replace('px','')
@@ -88,7 +88,7 @@ SeqGui.prototype.on_resize = function(w, h) {
     y -= this.nDialog.css('border-bottom-width').replace('px','')
     y -= this.nDialog.css('margin-top').replace('px','')
     y -= this.nDialog.css('margin-bottom').replace('px','')
-    this.eData.resize(Math.floor(x), Math.floor(y)-100)
+    this.eData.resize(Math.floor(x), Math.floor(y))
 }
 
 function SeqHelp(root) {
@@ -102,7 +102,7 @@ SeqHelp.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 function SeqUpload(on_upload) {
     var self = this
-    this.nRoot = $('<div />').attr('title','Fiel Upload').dialog({autoOpen: false, modal: true, width: 500, show: 'slide'})
+    this.nRoot = $('<div />').attr('title','Fiel Upload').dialog({autoOpen: false, modal: true, width: 500})
     this.do_upload = on_upload
     
     this.nForm = $('<form />')
@@ -282,14 +282,18 @@ SeqDataTable.prototype.resize = function(sw, sh) {
 	// Wether the table element resizes
 	var ch = this.lZoom
 	if(!this.sShowCompare) ch = 0
+	sw -= 4 // Borders
+	sh -= 5 // Borders
+	sh -= this.nStatus.outerHeight(true)
+
 	if(this.eSeqMap) {
-    	this.eRulerMap.resize(sw-this.lIndexWidth-this.lSliderWidth-4, this.lRulerHeight)
-    	this.eSeqMap.resize(sw-this.lIndexWidth-this.lSliderWidth-4, sh-ch-this.lRulerHeight-this.lSliderHeight-5)
-    	this.eIndexMap.resize(this.lIndexWidth, sh-ch-this.lRulerHeight-this.lSliderHeight-5)
-    	this.eSeq2Map.resize(sw-this.lIndexWidth-this.lSliderWidth-4, ch)
+    	this.eRulerMap.resize(sw-this.lIndexWidth-this.lSliderWidth, this.lRulerHeight)
+    	this.eSeqMap.resize(sw-this.lIndexWidth-this.lSliderWidth, sh-ch-this.lRulerHeight-this.lSliderHeight)
+    	this.eIndexMap.resize(this.lIndexWidth, sh-ch-this.lRulerHeight-this.lSliderHeight)
+    	this.eSeq2Map.resize(sw-this.lIndexWidth-this.lSliderWidth, ch)
     	this.eIndex2Map.resize(this.lIndexWidth, ch)
-    	this.nVSlider.height(sh-ch-this.lRulerHeight-this.lSliderHeight-1-5)
-    	this.nHSlider.width(sw-this.lIndexWidth-this.lSliderWidth-1-4)
+    	this.nVSlider.height(sh-ch-this.lRulerHeight-this.lSliderHeight-2)
+    	this.nHSlider.width(sw-this.lIndexWidth-this.lSliderWidth-2)
     }
 	this.nTable.width(sw)
 	this.nTable.height(sh)

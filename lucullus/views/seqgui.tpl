@@ -16,9 +16,6 @@
 	<title>Lucullus</title>
 </head>
 <body>
-	<div id="debug"></div>
-	<div id="seqgui" style="width: 90%">
-    </div>
 	<script type="text/javascript">
 	  /*<![CDATA[*/
 	var autoload = jQuery.query.get('upUrl')
@@ -29,7 +26,7 @@
 	$(window).load(function () {
 		if(autoload) $('input[name="upUrl"]').val(autoload)
 		api = new Lucullus.api(server, "test")
-		gui = new SeqGui(api, '#seqgui')
+		gui = new SeqGui(api)
 	})
 	/*]]>*/</script>
 </body>
