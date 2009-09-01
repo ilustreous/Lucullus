@@ -102,9 +102,38 @@ Lucullus.wait = function (o, callback) {
 
 
 
+/**
+ * Sync calls for async events
+ */
 
+Lucullus.Trigger = function() {
+    this.callbacks = Array()
+    this.wait(arguments)
+    this.done = false
+}
 
+Lucullus.Trigger.prototype.wait = function() {
+    var self = this
+    jQuery.each(arguments, function(i, f) {
+        if(jQuery.isFunction(f)) {
+            self.callbacks.push(f)
+        }
+    })
+	if(this.done) {
+		while(this.callbacks.length) {
+			var c = this.callbacks.shift()
+			c(this.done)
+		}
+	}
+}
 
+Lucullus.Trigger.prototype.finish = function(message) {
+    if(message)
+        this.done = message
+    else
+        this.done = true
+    this.wait()
+}
 
 
 
@@ -127,6 +156,7 @@ Lucullus.Call = function(url, parameter, callback, notnow) {
 
 	this.result = null
 	this.error = null
+	//this.event = new Lucullus.Event(callback)
 
 	this.run(url, parameter, callback, notnow)
 }

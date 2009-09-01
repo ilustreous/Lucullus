@@ -1,0 +1,21 @@
+.seqgui {}
+.seqgui div.tabs {
+    border-bottom: 1px solid grey;
+}
+
+.seqgui div.tabs a.tab {
+    text-decoration: none;
+    margin: 0 0.5em;
+    padding: 2px 0;
+    font-size: 0.9em;
+}
+
+.seqgui div.tabs a.tab:hover {
+    text-decoration: underline;
+}
+
+.seqgui div.tabs a.tab_selected {
+    opacity: 0.5;
+}
+
+
