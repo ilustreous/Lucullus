@@ -220,8 +220,6 @@ class SequenceResource(base.BaseView):
 				context.show_text(char)
 		return self
 
-base.register_plugin("Sequence", SequenceResource)
-
 
 
 
