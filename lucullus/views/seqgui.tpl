@@ -4,15 +4,15 @@
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 	<script src="./jquery/jquery-1.3.2.min.js" type="text/javascript"></script>
+	<script src="./jquery/jquery-ui-1.7.2.custom.min.js" type="text/javascript"></script>
 	<script src="./jquery/jquery.query.js" type="text/javascript"></script>
-
-	<script src="./jquery/jquery-ui-1.7.2.custom.min.js" type="text/javascript"></script>
-	<script src="./jquery/jquery-ui-1.7.2.custom.min.js" type="text/javascript"></script>
-	<link type="text/css" href="./jquery/jquery-ui-1.7.2.custom.css" rel="stylesheet" />
-	<link type="text/css" href="./css/main.css" rel="stylesheet" />
-
 	<script src="./js/lucullus.js"	 type="text/javascript"></script>
 	<script src="./js/lucullus.seqgui.js"	type="text/javascript"></script>
+
+	<!-- <link type="text/css" href="./jquery/smoothness/jquery-ui-1.7.2.custom.css" rel="stylesheet" /> -->
+	<link type="text/css" href="./jquery/lightness/jquery-ui-1.7.2.custom.css" rel="stylesheet" />
+	<link type="text/css" href="./css/main.css" rel="stylesheet" />
+
 	<title>Lucullus</title>
 </head>
 <body>

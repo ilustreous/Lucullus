@@ -450,7 +450,10 @@ Lucullus.Resource.prototype.query = function(action, options, callback) {
 	return call
 }
 
-
+Lucullus.Resource.prototype.close = function() {
+    var call = this.query('close')
+    this.error = {message:"Resource closed"}
+}
 
 
 

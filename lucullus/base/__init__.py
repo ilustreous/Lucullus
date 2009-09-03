@@ -73,7 +73,7 @@ class BaseResource(object):
 		try:
 			c = getattr(self, "api_" + name)
 		except (AttributeError), e:
-			raise QueryNoApiError("Resource %s does not implement %s()" % (self.__class__.__name__, name))
+			raise ResourceQueryNoApiError("Resource %s does not implement %s()" % (self.__class__.__name__, name))
 		
 		# Parameter testing
 		provided = set(options.keys())
@@ -86,10 +86,10 @@ class BaseResource(object):
 		available = set(available)
 		missing = requied - provided
 		if missing:
-			raise QueryOptionsError('Missing arguments: %s' % ','.join(missing))
+			raise ResourceQueryOptionsError('Missing arguments: %s' % ','.join(missing))
 		unknown = provided - available
 		if unknown and not twostar:
-			raise QueryOptionsError('Unknown arguments: %s' % ','.join(unknown))
+			raise ResourceQueryOptionsError('Unknown arguments: %s' % ','.join(unknown))
 
 		self.touch(False)
 		return c(**options)
@@ -216,7 +216,7 @@ class RulerView(BaseView):
 		self.fontsize	= int(options.get('fontsize', self.fontsize))
 
 	def size(self):
-		return (2**16, self.fontsize + 5)
+		return (2**32, self.fontsize + 5)
 		
 	def offset(self):
 		return (0,0)

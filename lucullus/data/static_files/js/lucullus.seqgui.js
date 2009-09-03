@@ -26,11 +26,15 @@ function SeqGui(api) {
         height:400, minHeight: 200,
         width:700, minWidth: 400,
         title: "Lucullus Sequence Viewer",
-        resizeStop: function(e, ui) { self.on_resize() }
+        resizeStop: function(e, ui) { self.on_resize() },
+        close: function() {self.on_close()}
     }).css('padding','3px').addClass('seqgui').css('overflow','hidden')
 
     this.nTabs = $('<div class="tabs"/>')
-    this.nTabs.append($('<a>Upload</a>').click(function(){
+    this.nTabs.append($('<a>Load</a>').click(function(){
+        self.eUpload.show()
+    }))
+    this.nTabs.append($('<a>Search</a>').click(function(){
         self.eUpload.show()
     }))
     this.nTabs.append($('<a>Help</a>').click(function(){
@@ -74,6 +78,10 @@ SeqGui.prototype.upload = function(file, type, compression) {
     })
 }
 
+SeqGui.prototype.on_close = function() {
+    this.eData.on_close()
+}
+
 SeqGui.prototype.on_resize = function(w, h) {
     var x = this.nDialog.innerWidth()
     x -= this.nDialog.css('padding-left').replace('px','')
@@ -92,7 +100,13 @@ SeqGui.prototype.on_resize = function(w, h) {
 }
 
 function SeqHelp(root) {
-    this.nRoot = $('<div />').attr('title','Help').dialog({autoOpen: false})
+    this.nRoot = $('<div />').attr('title','Help').dialog({
+        autoOpen: false, buttons: {
+		    Ok: function() {
+			    $(this).dialog('close');
+		    }
+	    }
+	})
     this.nRoot.html('Help meee')
 }
 
@@ -102,24 +116,25 @@ SeqHelp.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 function SeqUpload(on_upload) {
     var self = this
-    this.nRoot = $('<div />').attr('title','Fiel Upload').dialog({autoOpen: false, modal: true, width: 500})
     this.do_upload = on_upload
-    
+
+    this.nRoot = $('<div />').attr('title','Fiel Upload').addClass('seqgui')
     this.nForm = $('<form />')
+    this.nForm.append($('<p />').text('You can upload fasta files up to 30MB in size with any number of sequences.'))
     this.nStatus = $('<div>').css('color','red')
-    this.nForm.append($('<label for="upUrl" />').text('File').css('display','block'))
-    this.nForm.append($('<input type="text" name="upUrl" />'))
+    this.nForm.append($('<label for="upUrl" />').text('File'))
+    this.nForm.append($('<input type="text" name="upUrl" />').addClass('text'))
+    this.nForm.append($('<label for="format" />').text('Format'))
     this.nForm.append($('<select />').attr('name','format')
-        .append($('<option />').val('fasta').text('Fasta')))
+        .append($('<option />').val('fasta').text('fasta')))
+    this.nForm.append($('<label for="packed" />').text('Compression'))
     this.nForm.append($('<select />').attr('name','packed')
-        .append($('<option />').val('raw').text(''))
-        .append($('<option />').val('zip').text('.zip'))
-        .append($('<option />').val('gzip').text('.gzip'))
-        .append($('<option />').val('bzip2').text('.bzip2')))
-    this.nForm.append($('<input type="submit" name="submit" />').val('Upload'))
+        .append($('<option />').val('raw').text('none'))
+        .append($('<option />').val('gzip').text('gzip'))
+        .append($('<option />').val('bzip2').text('bzip2')))
     this.nForm.append(this.nStatus)
     this.nRoot.empty().append(this.nForm)
-
+    
     this.nForm.submit(function(e) {
         var url = self.nForm.find('input[name="upUrl"]').val()
 		var format = self.nForm.find('select[name="format"]').val()
@@ -127,6 +142,15 @@ function SeqUpload(on_upload) {
 		self.do_upload(url, format, packed)
 		return false
     })
+
+    this.nRoot.dialog({autoOpen: false, modal: true, width: 500, buttons:{
+	    Abort: function() {
+		    $(this).dialog('close');
+	    }, 
+	    Upload: function() {
+		    self.nForm.submit();
+	    }
+    }})
 }
 
 SeqUpload.prototype.show = function() {this.nRoot.dialog('open', true)}
@@ -166,8 +190,8 @@ function SeqDataTable(api, root) {
 	this.lZoom = 12	// zoom level
 	this.lIndexWidth = 100 // width of index column
 	this.lRulerHeight = 20 // height if ruler rw
-	this.lSliderWidth = 12
-	this.lSliderHeight = 12
+	this.lSliderWidth = 16
+	this.lSliderHeight = 16
 	
 	// Settings
 	this.sShowCompare = false
@@ -175,6 +199,10 @@ function SeqDataTable(api, root) {
 	// HTML Nodes
 	this.nRoot = $(root)
     this.nRoot.empty()
+
+	this.nStatus = $('<div />')
+	this.nRoot.append(this.nStatus)
+
 	this.nTable = $('<table><tr><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td></tr><td></td><td></td><td></td></tr></table>')
 	this.nTableTDs = this.nTable.find('td')
 	this.nSeq = this.nTable.find('tr:eq(2) td:eq(1)')
@@ -182,13 +210,7 @@ function SeqDataTable(api, root) {
 	this.nSeq2 = this.nTable.find('tr:eq(1) td:eq(1)')
 	this.nIndex2 = this.nTable.find('tr:eq(1) td:eq(0)')
 	this.nRuler = this.nTable.find('tr:eq(0) td:eq(1)')
-	this.nRoot.append(this.nTable)
-
-	this.nStatus = $('<div />')
-	this.nRoot.append(this.nStatus)
-
-	this.nSearch = $('<form />')
-	this.nRoot.append(this.nSearch)
+	this.nRoot.append(this.nTable.hide())
 
 	// Show/Hide everyting
 	this.nTable.find('tr:eq(1) td').hide()
@@ -202,8 +224,13 @@ function SeqDataTable(api, root) {
 		.css('height','')
 		.css('padding','0')
 		.css('margin','0')
-		.css('border','1px solid grey')
-
+    this.nSeq.css('border','1px solid lightgrey')
+    this.nSeq2.css('border','1px solid lightgrey')
+    this.nIndex.css('border','1px solid lightgrey')
+    this.nIndex2.css('border','1px solid lightgrey')
+    this.nRuler.css('border','1px solid lightgrey')
+	
+    
 	// GUI elements (init, prepare and setup)
 	this.eStatus = this.nStatus
 	this.status('Initilalizing...')
@@ -276,6 +303,14 @@ SeqDataTable.prototype.status = function(txt) {
 	this.eStatus.text(txt)
 }
 
+SeqDataTable.prototype.on_close = function() {
+    this.eRulerMap.view.close()
+    this.eSeqMap.view.close()
+    this.eSeq2Map.view.close()
+    this.eIndexMap.view.close()
+    this.eIndex2Map.view.close()
+}
+
 SeqDataTable.prototype.resize = function(sw, sh) {
     // Firefox bug...
 	this.nTable.css('border-collapse','separate').css('border-collapse','collapse')
@@ -311,6 +346,7 @@ SeqDataTable.prototype.upload = function(file, format, compression){
 	this.status('Starting Upload. File: '+file+' Format: '+format)
     var trigger = new Lucullus.Trigger() 
 	var self = this
+	self.nTable.hide()
 	// Request resources
 	self.eSeqMap.view.wait(function(){
 		self.eSeqMap.view.setup({'source':file, 'format':format})
@@ -321,6 +357,7 @@ SeqDataTable.prototype.upload = function(file, format, compression){
 				self.eSeqMap.view.recover()
 				return
 			}
+			self.nTable.show()
 			self.eSeqMap.refresh()
 			//self.eSlider.slider('option', 'max', self.eSeqMap.view.columns)
 			self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_datasize()[0], self.lRulerHeight)
