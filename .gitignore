@@ -4,4 +4,4 @@
 MANIFEST
 build/
 dist/
-
+lucullus/data/*.res
