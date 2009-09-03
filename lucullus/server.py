@@ -255,6 +255,7 @@ def cleanup():
 
 def serve():
     bottle.run(server=bottle.PasteServer, host='0.0.0.0', port=8080)
+    rdb.cleanup(0)
     return 0
     
 if __name__ == '__main__':
