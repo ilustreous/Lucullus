@@ -35,7 +35,7 @@ function SeqGui(api) {
         self.eUpload.show()
     }))
     this.nTabs.append($('<a>Search</a>').click(function(){
-        self.eUpload.show()
+        self.eSearch.show()
     }))
     this.nTabs.append($('<a>Help</a>').click(function(){
         self.eHelp.show()
@@ -57,10 +57,14 @@ function SeqGui(api) {
     this.nDialog.append(this.nData)
 
     this.eData = new SeqDataTable(this.api, this.nData)
-    this.eHelp = new SeqHelp()
-    this.eUpload = new SeqUpload(function(file, type, compression) {
+    this.eHelp = new SeqHelpDialog()
+    this.eUpload = new SeqUploadDialog(function(file, type, compression) {
         self.upload(file, type, compression)
     })
+    this.eSearch = new SeqSearchDialog(function(q) {
+        self.search(q)
+    })
+
     this.eUpload.show()
 }
 
@@ -74,6 +78,15 @@ SeqGui.prototype.upload = function(file, type, compression) {
             self.nDialog.dialog('option', 'title', 'Lucullus ('+file+')')
             self.eUpload.hide()
             self.on_resize()
+        }
+    })
+}
+
+SeqGui.prototype.search = function(q) {
+    var self = this
+    this.eData.jump_to(q).wait(function(c) {
+        if(c.error) {
+            self.eDialog.status(c.error.message)
         }
     })
 }
@@ -99,7 +112,7 @@ SeqGui.prototype.on_resize = function(w, h) {
     this.eData.resize(Math.floor(x), Math.floor(y))
 }
 
-function SeqHelp(root) {
+function SeqHelpDialog(root) {
     this.nRoot = $('<div />').attr('title','Help').dialog({
         autoOpen: false, buttons: {
             Ok: function() {
@@ -110,11 +123,11 @@ function SeqHelp(root) {
     this.nRoot.html('Help meee')
 }
 
-SeqHelp.prototype.show = function() {this.nRoot.dialog('open', true)}
-SeqHelp.prototype.hide = function() {this.nRoot.dialog('close', true)}
+SeqHelpDialog.prototype.show = function() {this.nRoot.dialog('open', true)}
+SeqHelpDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 
-function SeqUpload(on_upload) {
+function SeqUploadDialog(on_upload) {
     var self = this
     this.do_upload = on_upload
 
@@ -123,7 +136,7 @@ function SeqUpload(on_upload) {
     this.nForm.append($('<p />').text('You can upload fasta files up to 30MB in size with any number of sequences.'))
     this.nStatus = $('<div>').css('color','red')
     this.nForm.append($('<label for="upUrl" />').text('File'))
-    this.nForm.append($('<input type="text" name="upUrl" />').addClass('text'))
+    this.nForm.append($('<input type="text" name="upUrl" />').addClass('text').val(jQuery.query.get('upUrl')))
     this.nForm.append($('<label for="format" />').text('Format'))
     this.nForm.append($('<select />').attr('name','format')
         .append($('<option />').val('fasta').text('fasta')))
@@ -153,30 +166,45 @@ function SeqUpload(on_upload) {
     }})
 }
 
-SeqUpload.prototype.show = function() {this.nRoot.dialog('open', true)}
-SeqUpload.prototype.hide = function() {this.nRoot.dialog('close', true)}
+SeqUploadDialog.prototype.show = function() {this.nRoot.dialog('open', true)}
+SeqUploadDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 
-SeqUpload.prototype.status = function(msg) {
+SeqUploadDialog.prototype.status = function(msg) {
     this.nStatus.text(msg)
 }
 
 
-function SeqSlider(data_table, root) {
+
+function SeqSearchDialog(on_search) {
     var self = this
-    this.dt = data_table
-    this.node = $('<div />').css('height','100px')
-    this.node.slider({
-        min:0, max:100,
-        stop: function(e, ui) {
-            self.dt.slide_to(self.dt.get_columns() * ui.value / 100, null)
-        },
-        slide: function(e, ui) {
-            self.status("Slide to: " + Math.ceil(self.dt.get_columns() * ui.value / 100) + "/" + self.dt.get_columns())
-        },
-        orientation: "vertical"
+    this.search = on_search
+
+    this.nRoot = $('<div />').attr('title','Sequence Search').addClass('seqgui')
+    this.nForm = $('<form />')
+    this.nForm.append($('<label for="q" />').text('Name'))
+    this.nForm.append($('<input type="text" name="q" />').addClass('text'))
+    this.nRoot.empty().append(this.nForm)
+    
+    this.nForm.submit(function(e) {
+        var q = self.nForm.find('input[name="q"]').val()
+        if(q) self.search(q)
+        return false
     })
+
+    this.nRoot.dialog({autoOpen: false, buttons:{
+        Abort: function() {
+            $(this).dialog('close');
+        }, 
+        Search: function() {
+            self.nForm.submit();
+        }
+    }})
 }
+
+SeqSearchDialog.prototype.show = function() {this.nRoot.dialog('open', true)}
+SeqSearchDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
+
 
 
 
@@ -237,11 +265,27 @@ function SeqDataTable(api, root) {
 
     this.nHSlider = $('<div />')
     this.nTable.find('tr:eq(3) td:eq(1)').append(this.nHSlider)
-    this.nHSlider.slider()
+    this.nHSlider.slider({
+        min:0, max:0,
+        stop: function(e, ui) {
+            self.slide_to(Math.max(1,ui.value), null)
+        },
+        slide: function(e, ui) {
+            self.status("Jump to sequence position: " + Math.max(1,ui.value) +"/"+self.eSeqMap.view.columns)
+        }})
 
     this.nVSlider = $('<div />')
     this.nTable.find('tr:eq(2) td:eq(2)').append(this.nVSlider)
-    this.nVSlider.slider({orientation: "vertical"})
+    this.nVSlider.slider({
+        orientation: "vertical", 
+        min:0, max:0,
+        stop: function(e, ui) {
+            self.slide_to(null, Math.max(1,self.eSeqMap.view.rows - ui.value))
+        },
+        slide: function(e, ui) {
+            var p = Math.max(1,self.eSeqMap.view.rows - ui.value)
+            self.status("Jump to sequence number: " + p +"/"+self.eSeqMap.view.rows + ' (' + self.names[p-1] +')')
+        }})
 
     this.eSeqMap = new Lucullus.ViewMap(this.nSeq,
         this.api.create('Sequence', {'fontsize': this.lZoom}))
@@ -253,27 +297,10 @@ function SeqDataTable(api, root) {
         this.api.create('Index', {'fontsize': this.lZoom}))
     this.eRulerMap = new Lucullus.ViewMap(this.nRuler,
         this.api.create('Ruler', {'fontsize':Math.floor(this.lZoom*0.8), 'step':this.lZoom}))
-    /*this.eSlider = this.nSlider.css('height', '100px').slider({
-        min:0, max:0,
-        stop: function(e, ui) {
-            self.slide_to(ui.value, null)
-        },
-        slide: function(e, ui) {
-            self.status("Slide to: " + ui.value +"/"+self.eSeqMap.view.columns)
-        },
-        
-    })
-    this.eSeqMap.cMove = function() { 
-        if(self.eSeqMap && self.eSeqMap.get_datasize()[0]) {
-            var pos = self.eSeqMap.view.columns * (self.eSeqMap.get_position()[0] / (self.eSeqMap.get_datasize()[0] - self.eSeqMap.get_size()[0]))
-            self.eSlider.slider('value', pos)
-        }   
-    }
-    this.nSearch.find('form').bind('submit', function(e) {
-        self.jump_to(self.nSearch.find('input[name="q"]').val())
-        return false
-    })*/
 
+    this.eSeqMap.cMove = function() { 
+        self.update_slider()
+    }
 
     // Absolutize table size and recalculate column/row sizes
     this.resize(this.nTable.width(), this.nTable.height())
@@ -311,6 +338,14 @@ SeqDataTable.prototype.on_close = function() {
     this.eIndex2Map.view.close()
 }
 
+SeqDataTable.prototype.update_slider = function() {
+    if(this.eSeqMap && this.eSeqMap.get_datasize()[0] && this.eSeqMap.get_datasize()[1]) {
+        var x = this.eSeqMap.view.columns * (this.eSeqMap.get_position()[0] / (this.eSeqMap.get_datasize()[0] - this.eSeqMap.get_size()[0]))
+        var y = this.eSeqMap.view.rows * (this.eSeqMap.get_position()[1] / (this.eSeqMap.get_datasize()[1] - this.eSeqMap.get_size()[1]))
+        this.nHSlider.slider('value', x)
+        this.nVSlider.slider('value', this.eSeqMap.view.rows - y)
+    }
+}
 SeqDataTable.prototype.resize = function(sw, sh) {
     // Firefox bug...
     this.nTable.css('border-collapse','separate').css('border-collapse','collapse')
@@ -359,7 +394,9 @@ SeqDataTable.prototype.upload = function(file, format, compression){
             }
             self.nTable.show()
             self.eSeqMap.refresh()
-            //self.eSlider.slider('option', 'max', self.eSeqMap.view.columns)
+            self.nHSlider.slider('option', 'max', self.eSeqMap.view.columns)
+            self.nVSlider.slider('option', 'max', self.eSeqMap.view.rows)
+            self.update_slider()
             self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_datasize()[0], self.lRulerHeight)
             self.status('Parsing complete. Number of sequences: '+self.eSeqMap.view.len)
             self.eSeqMap.view.keys().wait(function(c){
@@ -379,27 +416,30 @@ SeqDataTable.prototype.upload = function(file, format, compression){
     
 SeqDataTable.prototype.jump_to = function(name) {
     var self = this
-    self.eSeqMap.view.search({'query':name, 'limit':1}).wait(function(c) {
+    var trigger = new Lucullus.Trigger() 
+    self.eSeqMap.view.search({'query':name, 'limit':100}).wait(function(c) {
+        trigger.finish(c) // Do this before recover()ing from errors, so the callbacks can display the error message.
         if(c.result.matches) {
             if(c.result.matches.length > 0) {
                 var index = c.result.matches[0].index
-                var height_per_index = self.index_map.get_datasize()[1] / c.result.count
+                var height_per_index = self.eIndexMap.get_datasize()[1] / c.result.count
                 var target = (index) * height_per_index
-                target -= self.index_map.get_size()[1] / 2
-                self.status(target)
+                target -= self.eIndexMap.get_size()[1] / 2
+                self.status("Search completed. Found "+c.result.matches.length+" matching sequences. Jumped to first one: "+c.result.matches[0].name)
                 self.ml.scroll_to(null, Math.floor(-target))
-                jQuery('#seqjump').css('background-color','#eeffff')
             } else {
-                jQuery('#seqjump').css('background-color','#ffeeee')
+                self.status("Search string not found.")
             }
         }
     })
+    return trigger
 }
 
-SeqDataTable.prototype.slide_to = function(pos) {
+SeqDataTable.prototype.slide_to = function(x, y) {
     // new_position = (data_size - window_size) * (jump_to_column / num_columns)
-    var target = (this.eSeqMap.get_datasize()[0] - this.eSeqMap.get_size()[0]) * pos / this.eSeqMap.view.columns
-    this.ml.scroll_to(Math.floor(-target), null)
+    if(x) x = -Math.floor((this.eSeqMap.get_datasize()[0] - this.eSeqMap.get_size()[0]) * x / this.eSeqMap.view.columns)
+    if(y) y = -Math.floor((this.eSeqMap.get_datasize()[1] - this.eSeqMap.get_size()[1]) * y / this.eSeqMap.view.rows)
+    this.ml.move_to(x, y)
 }
 
 SeqDataTable.prototype.position_info = function(x,y) {

@@ -18,13 +18,11 @@
 <body>
 	<script type="text/javascript">
 	  /*<![CDATA[*/
-	var autoload = jQuery.query.get('upUrl')
 	var server = document.location.protocol + '//' + document.location.host + document.location.pathname + 'api'
 	var api
 	var gui
 		/* api calls are blocking. Never call them in main thread */
 	$(window).load(function () {
-		if(autoload) $('input[name="upUrl"]').val(autoload)
 		api = new Lucullus.api(server, "test")
 		gui = new SeqGui(api)
 	})

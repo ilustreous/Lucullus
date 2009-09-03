@@ -668,7 +668,7 @@ Lucullus.ViewMap.prototype.move_to = function(x,y) {
     var dx = x - this.offset[0]
     var dy = y - this.offset[1]
     this.move(dx, dy)
-    return self.offset.slice()
+    return this.offset.slice()
 }
 
 Lucullus.ViewMap.prototype.scroll_to = function(x,y,step,speed) {
