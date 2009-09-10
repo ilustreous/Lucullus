@@ -309,9 +309,9 @@ Lucullus.Resource.prototype.query = function(action, options) {
 
 
 
-Lucullus.Resource.prototype.dequeue = function(ignoreerror) {
+Lucullus.Resource.prototype.dequeue = function() {
     if(!this.current.done) return // this.currend will run dequeue() again later
-    if(this.current.error && !ignoreerror) return // The sceduler is stopped
+    if(this.current.error) return // The sceduler is stopped
     var self = this
     var q = this.queue.shift()
     if(q) {
@@ -379,9 +379,10 @@ Lucullus.Resource.prototype.update = function(dict) {
 
 Lucullus.Resource.prototype.recover = function(clear) {
     while(clear && this.queue.length) {
-        this.callbacks.shift()
+        this.queue.shift()
     }
-    this.dequeue(true)
+    this.current.error = null
+    this.dequeue()
 }
 
 

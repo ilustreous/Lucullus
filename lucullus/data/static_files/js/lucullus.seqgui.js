@@ -389,6 +389,7 @@ SeqDataTable.prototype.upload = function(file, format, compression){
             trigger.finish(c) // Do this before recover()ing from errors, so the callbacks can display the error message.
             if(c.error) {
                 self.status('Upload failed: '+c.error.error)
+                c.finish(c.error)
                 self.eSeqMap.view.recover()
                 return
             }
@@ -416,7 +417,7 @@ SeqDataTable.prototype.upload = function(file, format, compression){
     
 SeqDataTable.prototype.jump_to = function(name) {
     var self = this
-    var trigger = new Lucullus.Trigger() 
+    var trigger = new Lucullus.util.Trigger() 
     self.eSeqMap.view.search({'query':name, 'limit':100}).wait(function(c) {
         trigger.finish(c) // Do this before recover()ing from errors, so the callbacks can display the error message.
         if(c.result.matches) {
