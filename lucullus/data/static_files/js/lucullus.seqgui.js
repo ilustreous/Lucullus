@@ -379,16 +379,16 @@ SeqDataTable.prototype.resize = function(sw, sh) {
 
 SeqDataTable.prototype.upload = function(file, format, compression){
     this.status('Starting Upload. File: '+file+' Format: '+format)
-    var trigger = new Lucullus.Trigger() 
+    var trigger = new Lucullus.util.Trigger() 
     var self = this
     self.nTable.hide()
     // Request resources
     self.eSeqMap.view.wait(function(){
-        self.eSeqMap.view.setup({'source':file, 'format':format})
+        self.eSeqMap.view.query('setup', {'source':file, 'format':format})
         self.eSeqMap.view.wait( function(c) {
             trigger.finish(c) // Do this before recover()ing from errors, so the callbacks can display the error message.
             if(c.error) {
-                self.status('Upload failed: '+self.eSeqMap.view.error.message)
+                self.status('Upload failed: '+c.error.error)
                 self.eSeqMap.view.recover()
                 return
             }
@@ -404,7 +404,7 @@ SeqDataTable.prototype.upload = function(file, format, compression){
                     self.status('Failed to build an index: '+self.eSeqMap.view.error.message)
                 }
                 self.names = c.result.keys
-                self.eIndexMap.view.setup({'keys':self.names})
+                self.eIndexMap.view.query('setup', {'keys':self.names})
                 self.eIndexMap.view.wait(function(){
                     self.eIndexMap.refresh()
                 })

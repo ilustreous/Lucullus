@@ -108,7 +108,7 @@ def create():
         r = rdb.create(r_type, **options)
     except lucullus.base.PluginNotFoundError:
         bottle.abort(403, 'The requestet resource type is not available. Please coose from ths list: '+', '.join(rdb.plugins.keys()))
-    return {"id": r.id, "state": r.state(), "api": r.api}
+    return {"id": r.id, "state": r.state(), "methods": r.api}
 
 
 @bottle.route('/api/r:rid:[0-9]+:/setup', method='POST')
