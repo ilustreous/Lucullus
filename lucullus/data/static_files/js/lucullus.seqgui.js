@@ -61,17 +61,16 @@ function SeqGui(api) {
     this.eUpload = new SeqUploadDialog(function(file, type, compression) {
         self.upload(file, type, compression)
     })
-    this.eSearch = new SeqSearchDialog(function(q) {
-        self.search(q)
-    })
+    this.eSearch = new SeqSearchDialog(function(name, offset) {return self.eData.jump_to(name, offset)})
 
     this.eUpload.show()
 }
 
-
+/* Uploads a file and returns a trigger */
 SeqGui.prototype.upload = function(file, type, compression) {
     var self = this
-    this.eData.upload(file, type, compression).wait(function(c) {
+    var t = this.eData.upload(file, type, compression)
+    t.wait(function(c) {
         if(c.error) {
             self.eUpload.status(c.error.message)
         } else {
@@ -80,15 +79,11 @@ SeqGui.prototype.upload = function(file, type, compression) {
             self.on_resize()
         }
     })
+    return t
 }
 
-SeqGui.prototype.search = function(q) {
-    var self = this
-    this.eData.jump_to(q).wait(function(c) {
-        if(c.error) {
-            self.eDialog.status(c.error.message)
-        }
-    })
+SeqGui.prototype.focus = function(name) {
+    this.eData.jump_to(q)
 }
 
 SeqGui.prototype.on_close = function() {
@@ -129,11 +124,12 @@ SeqHelpDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 function SeqUploadDialog(on_upload) {
     var self = this
+    this.stdtext = 'You can upload fasta files up to 30MB in size with any number of sequences.'
     this.do_upload = on_upload
 
-    this.nRoot = $('<div />').attr('title','Fiel Upload').addClass('seqgui')
+    this.nRoot = $('<div />').attr('title','Fiel Upload').addClass('seqgui').empty()
     this.nForm = $('<form />')
-    this.nForm.append($('<p />').text('You can upload fasta files up to 30MB in size with any number of sequences.'))
+    this.nRoot.append($('<p />').addClass('status').text(this.stdtext))
     this.nStatus = $('<div>').css('color','red')
     this.nForm.append($('<label for="upUrl" />').text('File'))
     this.nForm.append($('<input type="text" name="upUrl" />').addClass('text').val(jQuery.query.get('upUrl')))
@@ -146,17 +142,27 @@ function SeqUploadDialog(on_upload) {
         .append($('<option />').val('gzip').text('gzip'))
         .append($('<option />').val('bzip2').text('bzip2')))
     this.nForm.append(this.nStatus)
-    this.nRoot.empty().append(this.nForm)
+    this.nRoot.append(this.nForm)
     
     this.nForm.submit(function(e) {
         var url = self.nForm.find('input[name="upUrl"]').val()
         var format = self.nForm.find('select[name="format"]').val()
         var packed = self.nForm.find('select[name="packed"]').val()
         self.do_upload(url, format, packed)
+        self.nRoot.find('.status').text('Uploading '+url+' ('+format+'). This may take a while...')
+        self.nForm.hide('slow')
         return false
     })
 
-    this.nRoot.dialog({autoOpen: false, modal: true, width: 500, buttons:{
+    this.nRoot.dialog({
+        autoOpen: false,
+        modal: true,
+        width: 500,
+        close: function(e, ui) {
+            self.nRoot.find('.status').text(self.stdtext)
+            self.nForm.show()
+        },
+        buttons: {
         Abort: function() {
             $(this).dialog('close');
         }, 
@@ -180,29 +186,74 @@ function SeqSearchDialog(on_search) {
     var self = this
     this.search = on_search
 
-    this.nRoot = $('<div />').attr('title','Sequence Search').addClass('seqgui')
+    this.nRoot = $('<div />' ).attr('title','Sequence Search').addClass('seqgui')
+    this.nStatus = $('<div />').text("Enter your search query")
     this.nForm = $('<form />')
     this.nForm.append($('<label for="q" />').text('Name'))
     this.nForm.append($('<input type="text" name="q" />').addClass('text'))
+    this.nForm.append(this.nStatus)
     this.nRoot.empty().append(this.nForm)
-    
+    // This is used to determine the visibility of the 'Next' button
+    this.offset = 0
+    this.lastsearch = ''
+
     this.nForm.submit(function(e) {
         var q = self.nForm.find('input[name="q"]').val()
-        if(q) self.search(q)
+        if(q == self.lastsearch) {
+            self.offset = 0
+            self.lastsearch = q
+        }
+        if(q) {
+            var t = self.search(q, self.offset)
+            t.wait(function(c) {
+                if(c.result.matches) {
+                    if(c.result.matches.length > 0) {
+                        if(self.offset >= c.result.matches.length - 1) {
+                            self.offset = c.result.matches.length - 1
+                            self.nRoot.parent().find("button:contains(Next)").hide()
+                        } else {
+                            self.nRoot.parent().find("button:contains(Next)").show()
+                        }
+                        
+                        self.nStatus.html("Search completed. Jumped to "+(self.offset+1)+" out of "+c.result.matches.length+" results: <b>"+c.result.matches[0].name+'</b>')
+                    } else {
+                        self.nRoot.parent().find("button:contains(Next)").hide()
+                        self.nStatus.text("Search string not found.")
+                    }
+                }
+            })
+        } else {
+            self.nStatus.text("Please enter a seqrch query first")
+        }
         return false
     })
 
-    this.nRoot.dialog({autoOpen: false, buttons:{
-        Abort: function() {
-            $(this).dialog('close');
-        }, 
-        Search: function() {
-            self.nForm.submit();
+    this.nRoot.dialog({
+        autoOpen: false,
+        zIndex: 4000,
+        close: function() {
+            self.offset = 0
+            self.nRoot.parent().find("button:contains(Next)").hide()
+        },
+        buttons:{
+            Next: function() {
+                var offset = self.nForm.find('input[name="offset"]').val() || '0'
+                self.offset += 1
+                self.nForm.submit();
+            },
+            Search: function() {
+                self.offset = 0
+                self.nForm.submit();
+            },
+            Abort: function() {
+                $(this).dialog('close');
+            }, 
         }
-    }})
+    })
+    self.nRoot.parent().find("button:contains(Next)").hide()
 }
 
-SeqSearchDialog.prototype.show = function() {this.nRoot.dialog('open', true)}
+SeqSearchDialog.prototype.show = function() {this.nRoot.dialog('open', true).dialog( 'moveToTop' )}
 SeqSearchDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 
@@ -414,23 +465,18 @@ SeqDataTable.prototype.upload = function(file, format, compression){
     })
     return trigger
 }
-    
-SeqDataTable.prototype.jump_to = function(name) {
+
+SeqDataTable.prototype.jump_to = function(name, offset) {
     var self = this
-    var trigger = new Lucullus.util.Trigger() 
-    self.eSeqMap.view.search({'query':name, 'limit':100}).wait(function(c) {
-        trigger.finish(c) // Do this before recover()ing from errors, so the callbacks can display the error message.
-        if(c.result.matches) {
-            if(c.result.matches.length > 0) {
-                var index = c.result.matches[0].index
-                var height_per_index = self.eIndexMap.get_datasize()[1] / c.result.count
-                var target = (index) * height_per_index
-                target -= self.eIndexMap.get_size()[1] / 2
-                self.status("Search completed. Found "+c.result.matches.length+" matching sequences. Jumped to first one: "+c.result.matches[0].name)
-                self.ml.scroll_to(null, Math.floor(-target))
-            } else {
-                self.status("Search string not found.")
-            }
+    var trigger = self.eSeqMap.view.search({'query':name, 'limit':100})
+    var offset = parseInt(offset) || 0
+    trigger.wait(function(c){
+        if(c.result && c.result.matches && c.result.matches.length > offset) {
+            var index = c.result.matches[offset].index
+            var height_per_index = self.eIndexMap.get_datasize()[1] / c.result.count
+            var target = (index) * height_per_index
+            target -= self.eIndexMap.get_size()[1] / 2
+            self.ml.scroll_to(null, Math.floor(-target))
         }
     })
     return trigger
@@ -455,7 +501,7 @@ SeqDataTable.prototype.position_info = function(x,y) {
 }
 
 SeqDataTable.prototype.get_columns = function() {
-    if(self.eSeqMap && self.eSeqMal.view)
+    if(self.eSeqMap && self.eSeqMap.view)
         return self.eSeqMap.view.columns
     else
         return 0

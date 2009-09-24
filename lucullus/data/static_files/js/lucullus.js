@@ -86,6 +86,19 @@ Lucullus.util.Trigger.prototype.wait = function() {
     return this
 }
 
+/** Inherit the state of another trigger
+ *
+ */
+
+Lucullus.util.Trigger.prototype.see = function(trigger) {
+    this.done = trigger.done
+    this.result = trigger.result
+    this.error = trigger.error
+    this.wait()
+    return this
+}
+
+
 /** Sets this.result and runs all the callbacks.
  *
  */
