@@ -17,7 +17,7 @@ from StringIO import StringIO
 import fnmatch
 
 from lucullus import base
-from lucullus.base import renderer
+from lucullus.base import renderer, color
 from lucullus.base import shapes
 from Bio import SeqIO, Seq, SeqRecord
 
@@ -33,32 +33,6 @@ class SequenceResource(base.BaseView):
 		self.format = 'fasta'
 		self.fontsize = 12
 		self.len = 0
-		self.color = {}
-		self.color['*'] = renderer.hexcolor('#000000FF')
-		self.color['-'] = renderer.hexcolor('#999999FF')
-		self.color['A'] = renderer.hexcolor('#008000FF')
-		self.color['C'] = renderer.hexcolor('#A20000FF')
-		self.color['E'] = renderer.hexcolor('#FF0000FF')
-		self.color['D'] = renderer.hexcolor('#FF0000FF')
-		self.color['G'] = renderer.hexcolor('#FF00FFFF')
-		self.color['F'] = renderer.hexcolor('#008000FF')
-		self.color['I'] = renderer.hexcolor('#008000FF')
-		self.color['H'] = renderer.hexcolor('#0080FFFF')
-		self.color['K'] = renderer.hexcolor('#0000D9FF')
-		self.color['M'] = renderer.hexcolor('#008000FF')
-		self.color['L'] = renderer.hexcolor('#008000FF')
-		self.color['N'] = renderer.hexcolor('#8080C0FF')
-		self.color['Q'] = renderer.hexcolor('#7171B9FF')
-		self.color['P'] = renderer.hexcolor('#D9D900FF')
-		self.color['S'] = renderer.hexcolor('#FF8000FF')
-		self.color['R'] = renderer.hexcolor('#0000FFFF')
-		self.color['T'] = renderer.hexcolor('#FF8000FF')
-		self.color['W'] = renderer.hexcolor('#00FF00FF')
-		self.color['V'] = renderer.hexcolor('#008000FF')
-		self.color['Y'] = renderer.hexcolor('#008000FF')
-		self.color['X'] = renderer.hexcolor('#000000FF')
-		self.color['section2'] = renderer.hexcolor('#EEEEEEFF')
-		self.color['section1'] = renderer.hexcolor('#FFFFFFFF')
 
 
 	def configure(self, **options):
@@ -67,9 +41,6 @@ class SequenceResource(base.BaseView):
 		self.format = options.get('format', self.format)
 		if 'source' in options:
 			self.api_load(source=self.source, format=self.format)
-		for key in options:
-			if key.startswith('color-'):
-				self.color[key[6:]] = base.renderer.hexcolor(options[key])
 
 
 	def size(self):
@@ -165,41 +136,31 @@ class SequenceResource(base.BaseView):
 		return {"keys":self.keys}
 
 
-	def setfontoptions(self, context):
-		context.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+	def render(self, rc):
+		# Shortcuts
+		c = rc.context
+		
+		# Configuration
+		c.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
 		options = cairo.FontOptions()
 		#fo.set_hint_metrics(cairo.HINT_METRICS_ON)
 		#fo.set_hint_style(cairo.HINT_STYLE_NONE)
 		options.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
-		context.set_font_options(options)
-		context.set_font_size(self.fontsize - 1)
-		return context.font_extents()
-
-
-	def render(self, context, x, y, w, h):
-		# Shortcuts
-		cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
-		c = context
-		fieldsize = self.fontsize
-		fontsize = self.fontsize - 1
-		cc = self.cols
-		rc = self.rows
-		color = self.color
-		
-		# Configuration
-		self.setfontoptions(c)
-		lineheight = context.font_extents()[1]
+		c.set_font_options(options)
+		c.set_font_size(self.fontsize - 1)
+		lineheight = c.font_extents()[1]
 
 		# Rows to consider
-		row_first = int(math.floor( float(cminy) / fieldsize))
-		row_last  = int(math.ceil(	float(cmaxy) / fieldsize))
+		row_first = int(math.floor( float(rc.top) / self.fontsize))
+		row_last  = int(math.ceil(	float(rc.bottom) / self.fontsize))
 		row_last  = min(row_last, self.rows)
-		col_first = int(math.floor( float(cminx) / fieldsize))
-		col_last  = int(math.ceil(	float(cmaxx) / fieldsize))
+		col_first = int(math.floor( float(rc.left) / self.fontsize))
+		col_last  = int(math.ceil(	float(rc.right) / self.fontsize))
 		#col_last  = min(col_last, self.cols)
 		
 		# Draw background
-		base.renderer.draw_stripes(c, cminx, cminy, w, h, (fieldsize*10), color["section1"], color["section2"])
+		base.renderer.draw_stripes(c, rc.left, rc.top, rc.width, rc.height,
+		(self.fontsize*10), color.get('bio','amino-section1'), color.get('bio','amino-section2'))
 
 		# Draw data
 		for row in range(row_first, row_last):
@@ -209,15 +170,15 @@ class SequenceResource(base.BaseView):
 				data = ''
 			# Fill with dashes
 			data += '-' * (col_last - col_first - len(data))
-			y = (row+1) * fieldsize - lineheight
+			y = (row+1) * self.fontsize - lineheight
 			for col in range(col_first, col_last):
 				char = data[col - col_first]
-				(r,g,b,a) = self.color.get(char,(0,0,0,1))
-				context.set_source_rgba(r,g,b,a)
-				char_padding_left, char_padding_top, char_width, char_height = context.text_extents(char)[0:4]
-				x = fieldsize * col + float(fieldsize - char_width - char_padding_left)/2
-				context.move_to(x, y)
-				context.show_text(char)
+				(r,g,b,a) = color.get('bio', 'amino-%s' % char, (0,0,0,1))
+				c.set_source_rgba(r,g,b,a)
+				char_padding_left, char_padding_top, char_width, char_height = c.text_extents(char)[0:4]
+				x = self.fontsize * col + float(self.fontsize - char_width - char_padding_left)/2
+				c.move_to(x, y)
+				c.show_text(char)
 		return self
 
 

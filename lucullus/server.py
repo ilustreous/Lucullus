@@ -2,7 +2,7 @@ import bottle
 import sys
 from os.path import abspath, join, dirname, basename
 from lucullus import base
-from lucullus.base import config
+from lucullus.base import config, RenderContext
 import lucullus.base
 import cairo
 import simplejson
@@ -13,28 +13,18 @@ import lucullus.plugins.seq
 import time
 import random
 import traceback
+import rfc822
 
 bottle.debug(True)
 
-# create logger
 log = logging.getLogger("lucullus")
-log.setLevel(logging.DEBUG)
-#create console handler and set level to debug
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-# create formatter
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-# add formatter to ch
-ch.setFormatter(formatter)
-# add ch to logger
-log.addHandler(ch)
+
+
 log.debug("Starting server")
 sessions = {}
 resource_path = abspath(join(dirname(__file__), './data'))
 bottle.TEMPLATE_PATH.insert(0,abspath(join(dirname(__file__), './views'))+'/')
-bottle.debug(True)
-
-print bottle.TEMPLATE_PATH
+log.debug("Template Path: %s", bottle.TEMPLATE_PATH)
 
 """
 Masterplan:
@@ -156,63 +146,50 @@ def info(rid):
     return {"id": rid, "state": r.state()}
 
 
-@bottle.route('/api/r:rid:[0-9]+:/x:x:[0-9]+:y:y:[0-9]+:w:w:[0-9]+:h:h:[0-9]+:\.:f:(png):')
-def render(rid, x, y, w, h, f):
-    import rfc822
-    r = rdb.fetch(int(rid),None)
+#/image/r1234/index/x256y512z0w256h256.png
+@bottle.route('/api/r:rid:[0-9]+:/(x:x:[0-9]+:)?(y:y:[0-9]+:)?(z:z:[0-9]+:)?(w:w:[0-9]+:)?(h:h:[0-9]+:)?\.:format:(png):')
+def render(rid, channel='default', x='0', y='0', z='0', w='256', h='256', format='png'):
+    ts = time.time()
+    r = rdb.fetch(int(rid), None)
     if not r:
         bottle.abort(404, 'Resource not found')
-
     if not isinstance(r, base.BaseView):
         raise bottle.abort(404, "This resource has no visuals")
-        
-    mode = 'RGB24'
 
     try:
-        x,y,w,h = map(int, (x,y,w,h))
+        x,y,z,w,h = map(lambda x: x and int(x) or 0, (x,y,z,w,h))
     except:
         bottle.abort(500, "Cannot parse input parameters. Use numeric values for x,y,z,w and h")
 
     if w < 16 or h < 16 or w > 1024 or h > 1024:
         bottle.abort(500, "Image size to big or to small")
-    if f not in ('png'):
+    if z < 0:
+        bottle.abort(500, "Negative zoom is impossible")
+    if format not in ('png'):
         bottle.abort(500, "Image format not supported.")
-    if mode not in ('ARGB32', 'RGB24'):
-        bottle.abort(500, "Image mode not supported")
 
     # Send cached file to client
-    filename = '/tmp/lucullus/image_%s.mtime%d.x%d.y%d.w%d.h%d.%s.%s' % (rid,int(r.mtime),x,y,w,h,mode,f)
-
+    filename = '/tmp/lucullus/image_%s_%s_mtime%dx%dy%dz%dw%dh%d.%s' % (rid,channel,int(r.mtime),x,y,z,w,h,format)
+    ts2 = time.time()
     if not os.path.exists(filename):
+        rc = RenderContext(left=x, top=y, width=w, height=h, zoom=z, format=format)
         try:
             try: os.makedirs(dirname(filename))
             except OSError: pass
-            io = open(filename, "wb")
+            with open(filename, "wb") as io:
+                r.render(rc)
+                rc.save(io)
         except (IOError,OSError):
-            log.error("Could not create cache image file %s", filename)
+            log.exception("Could not create cache image file %s", filename)
             raise
-
-        if "ARGB32" == mode:
-            surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
-        else:
-            surface = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
-
-        context = cairo.Context(surface)
-        context.translate(-x, -y)
-        try:
-            r.render(context, x, y, w, h)
         except Exception, e:
-            log.exception("Bad render call")
+            log.exception("Rendering failed!")
             raise
 
-        if format == 'png':
-            surface.write_to_png(io)
-        else:
-            surface.write_to_png(io)
-        io.close()
         
-    bottle.response.content_type = "image/%s" % f
+    bottle.response.content_type = "image/%s" % format
     bottle.response.header['X-Copyright'] = "Max Planck Institut (MPIBPC Goettingen) Marcel Hellkamp"
+    bottle.response.header['X-CPUTIME'] = "render: %f all: %f" % (time.time() - ts2, time.time() - ts)
     bottle.response.header['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
     bottle.send_file(filename=basename(filename), root=dirname(filename))
 

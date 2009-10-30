@@ -70,34 +70,5 @@ def hexcolor(h):
         pass
     else:
         raise AttributeError, "This is not a valid hex color code: %s" % h
-
     i = int(h,16)
     return intcolor(i, reverse=True)
-    
-color = {}
-color['*'] = hexcolor('#000000FF')
-color['-'] = hexcolor('#999999FF')
-color['A'] = hexcolor('#008000FF')
-color['C'] = hexcolor('#A20000FF')
-color['E'] = hexcolor('#FF0000FF')
-color['D'] = hexcolor('#FF0000FF')
-color['G'] = hexcolor('#FF00FFFF')
-color['F'] = hexcolor('#008000FF')
-color['I'] = hexcolor('#008000FF')
-color['H'] = hexcolor('#0080FFFF')
-color['K'] = hexcolor('#0000D9FF')
-color['M'] = hexcolor('#008000FF')
-color['L'] = hexcolor('#008000FF')
-color['N'] = hexcolor('#8080C0FF')
-color['Q'] = hexcolor('#7171B9FF')
-color['P'] = hexcolor('#D9D900FF')
-color['S'] = hexcolor('#FF8000FF')
-color['R'] = hexcolor('#0000FFFF')
-color['T'] = hexcolor('#FF8000FF')
-color['W'] = hexcolor('#00FF00FF')
-color['V'] = hexcolor('#008000FF')
-color['Y'] = hexcolor('#008000FF')
-color['X'] = hexcolor('#000000FF')
-color['section2'] = hexcolor('#EEEEEEFF')
-color['section1'] = hexcolor('#FFFFFFFF')
-

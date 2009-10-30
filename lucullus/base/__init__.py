@@ -9,7 +9,7 @@ Copyright (c) 2008 Marcel Hellkamp. All rights reserved.
 
 import cPickle as pickle
 import UserDict
-from lucullus.base import config
+from lucullus.base import config, color
 from lucullus.base.renderer import hexcolor
 import urllib2
 import tempfile
@@ -23,14 +23,8 @@ import random
 import inspect
 import glob
 
-""" List of Resource plugins """
-
-
-
-
 class PluginError(Exception): pass
 class PluginNotFoundError(PluginError):pass
-
 
 class ResourceError(Exception): pass
 class ResourceNotFound(ResourceError): pass
@@ -38,6 +32,104 @@ class ResourceUploadError(ResourceError): pass
 class ResourceQueryError(ResourceError): pass
 class ResourceQueryNoApiError(ResourceQueryError): pass
 class ResourceQueryOptionsError(ResourceQueryError): pass
+
+
+""" Geometry and cairo Helper
+"""
+
+class GeometryError(Exception): pass
+
+class RenderContext(object):
+    """
+        Represents a single render area (AOI: Area of Interest) and provides
+        georemtry and cairo helper methods. This is passed to plugins on a 
+        BaseView.render() call.
+    """
+    def __init__(self, top=0, left=0, zoom=0, width=256, height=246, format='png'):
+        self.top = top
+        self.left = left
+        self.width = width
+        self.height = height
+        self.zoom = zoom
+        self.format = format.lower()
+        self._surface = None
+        self._context = None
+
+    @property
+    def bottom(self): return self.top + self.height
+    @property
+    def right(self): return self.left + self.width
+    @property
+    def x(self): return self.left
+    @property
+    def y(self): return self.top
+    @property
+    def x1(self): return self.left
+    @property
+    def y1(self): return self.top
+    @property
+    def x2(self): return self.right
+    @property
+    def y2(self): return self.bottom
+    @property
+    def offset(self): return (self.left, self.top)
+    @property
+    def area(self): return (self.left, self.top, self.right, self.bottom)
+
+    @property
+    def surface(self):
+        """ A cairo surface """
+        if not self._surface:
+            if self.format in ('png'):
+                self._surface = cairo.ImageSurface(cairo.FORMAT_RGB24,
+                                                   self.width, self.height)
+            else:
+                raise NotImplementedError("Format %s is not supported." %
+                                          self.format)
+        return self._surface
+
+    @property
+    def context(self):
+        """ A cairo context translated to the AOI position """
+        if not self._context:
+            self._context = cairo.Context(self.surface)
+            self._context.translate(-self.left, -self.top)
+        return self._context
+
+    def test_point(self, x, y):
+        """ Test if a point is visible """
+        return self.left <= x <= self.wight \
+           and self.top <= y <= self.bottom
+    
+    def test_rectangle(self, left, top, right, bottom):
+        """ Test if a rectangle is visible (full or partly) """
+        return self.top < bottom and self.bottom > top \
+           and self.left < right and self.right > left
+
+    def intersect(self, left, top, right, bottom):
+        """ Return the visible part of a rectangle """
+        if self.test_area(left, top, right, bottom):
+            return max(self.top, top), max(self.left, left), \
+                   min(self.bottom, bottom), min(self.right, right)
+        else:
+            raise GeometryError("Rectangles do not intersect")
+
+    def save(self, io):
+        """ Renderes image to a byte stream """
+        if self.format == 'png':
+            self.surface.write_to_png(io)
+        else:
+            raise NotImplementedError("Format %s is not supported." %
+                                      self.format)
+
+    def clear(self, r=1.0, g=1.0, b=1.0, a=1.0):
+        """ Clears the image (color fill) """
+        self.set_color(r, g, b, a)
+        self.context.paint()
+        
+    def set_color(self, r=1.0, g=1.0, b=1.0, a=1.0):
+        """ Clears the image (color fill) """
+        self.context.set_source_rgba(r, g, b, a)
 
 
 class ResourceManager(object):
@@ -181,9 +273,9 @@ class BaseView(BaseResource):
         ox, oy = self.offset()
         return {'width':w, 'height':h, 'offset':[ox, oy], 'size':[w, h]}
 
-    def render(self, context, x=0, y=0, width=0, height=0):
-        """ Renders the selected area of the data into a cairo context. """
-
+    def render(self, ra):
+        """ Renders into a RenderArea cairo context. """
+        pass
 
 
 
@@ -194,7 +286,7 @@ class IndexView(BaseView):
         self.fontsize = 12 
         self.index = []
         self.color = {}
-        self.color['fontcolor'] = hexcolor('#000000FF')
+        self.color['fontcolor'] = color.get('css','black')
 
     def size(self):
         w = max([len(i) for i in self.index] + [0]) * self.fontsize
@@ -211,56 +303,37 @@ class IndexView(BaseView):
         if 'keys' in options and isinstance(options['keys'], list):
             self.index = map(str, options['keys'])
 
-    def setfontoptions(self, context):
-        context.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    def render(self, rc):
+        # Shortcuts
+        c = rc.context
+
+        # Configuration
+        c.select_font_face("mono", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         options = cairo.FontOptions()
         #fo.set_hint_metrics(cairo.HINT_METRICS_ON)
         #fo.set_hint_style(cairo.HINT_STYLE_NONE)
         options.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
-        context.set_font_options(options)
-        context.set_font_size(self.fontsize - 1)
-        return context.font_extents()
-
-    def render(self, context, x, y, w, h):
-        # Shortcuts
-        cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
-        c = context
-        lineheight = self.fontsize
-        fontsize = self.fontsize - 1
-        color = self.color
-        index = self.index
-
-        # Configuration
-        self.setfontoptions(c)
-        real_lineheight = context.font_extents()[1]
+        c.set_font_options(options)
+        c.set_font_size(self.fontsize - 1)
+        real_lineheight = c.font_extents()[1]
 
         # Rows to consider
-        row_first = int(math.floor( float(cminy) / lineheight))
-        row_last  = int(math.ceil(  float(cmaxy) / lineheight))
+        row_first = int(math.floor(float(rc.top) / self.fontsize))
+        row_last  = int(math.ceil(float(rc.bottom) / self.fontsize))
         row_last  = min(row_last, len(self.index)-1)
 
         # Fill the background with #ffffff
-        (r,g,b,a) = self.color.get('background',(1,1,1,1))
-        c.set_source_rgb(r, g, b)
-        c.rectangle(cminx, cminy, cmaxx-cminx, cmaxy-cminy)
-        c.fill()
-
-        (r,g,b,a) = self.color.get('fontcolor',(0,0,0,1))
-        c.set_source_rgba(r, g, b, a)
-        font_extends = context.font_extents()
+        rc.clear(*self.color.get('background',(1,1,1,1)))
+        rc.set_color(*self.color.get('fontcolor',(0,0,0,1)))
+        font_extends = c.font_extents()
 
         for row in range(row_first, row_last+1):
-            #if row % 2:
-            #   c.set_source_rgb(0.95, 0.95, 0.95)
-            #   c.rectangle(0, 0, vw, self.fieldsize)
-            #   c.fill()
-            #   c.set_source_rgb(0, 0, 0)
             name = self.index[row]
-            y = lineheight * row + lineheight - font_extends[1]
+            y = self.fontsize * row + self.fontsize - font_extends[1]
             x = 0
-            context.move_to(x, y)
-            context.show_text(name)
-        
+            c.move_to(x, y)
+            c.show_text(name)
+
         return self
 
 
@@ -271,7 +344,7 @@ class RulerView(BaseView):
         self.digits     = 10
         self.fontsize   = 12
         self.color = {}
-        self.color['fontcolor'] = hexcolor('#000000FF')
+        self.color['fontcolor'] = color.get('css','white')
 
     def configure(self, **options):
         self.step       = int(options.get('step', self.step))
@@ -285,14 +358,12 @@ class RulerView(BaseView):
     def offset(self):
         return (0,0)
 
-    def render(self, context, x, y, w, h):
-        cminx, cminy, cmaxx, cmaxy = x, y, x+w, y+h
-        c = context
+    def render(self, rc):
+        c = rc.context
 
-        first = x - x % self.step
-        last = x+w + (x+w) % self.step
-        c.set_source_rgb(1, 1, 1)
-        c.paint()
+        first = rc.left - rc.left % self.step
+        last = rc.right + rc.right % self.step
+        rc.clear(*color.get('css','white'))
 
         fo = cairo.FontOptions()
         fo.set_hint_metrics(cairo.HINT_METRICS_ON)
@@ -300,9 +371,9 @@ class RulerView(BaseView):
         fo.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
         c.set_font_options(fo)
         c.set_font_size(self.fontsize)
-        font_extends = context.font_extents()
-        
-        c.set_source_rgb(0, 0, 0)
+        font_extends = c.font_extents()
+
+        rc.set_color(*color.get('css', 'black'))
         for mark in xrange(first - self.step*self.digits, last + self.step*self.digits, self.step):
             if (mark % (self.step * self.digits)) == 0:
                 name = str(mark / self.step)
@@ -312,12 +383,11 @@ class RulerView(BaseView):
 
         for mark in xrange(first, last, self.step):
             if (mark % (self.step * self.marks)) == 0:
-                c.rectangle(mark,font_extends[3]+4,1,h)
+                c.rectangle(mark, font_extends[3]+4, 1, rc.height)
             if (mark % (self.step * self.digits)) == 0:
-                c.rectangle(mark,font_extends[3]+2,2,h)
+                c.rectangle(mark, font_extends[3]+2, 2, rc.height)
             c.fill()
 
-            
         return self
 
 
