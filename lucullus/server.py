@@ -31,9 +31,10 @@ log.addHandler(ch)
 log.debug("Starting server")
 sessions = {}
 resource_path = abspath(join(dirname(__file__), './data'))
-bottle.TEMPLATE_PATH.insert(0,abspath(join(dirname(__file__), './views'))+'/%s.tpl')
+bottle.TEMPLATE_PATH.insert(0,abspath(join(dirname(__file__), './views'))+'/')
+bottle.debug(True)
 
-
+print bottle.TEMPLATE_PATH
 
 """
 Masterplan:
@@ -75,26 +76,7 @@ def log_error(e):
     log.debug(err)
     
 
-def jsonify(action):
-    """ Action Decorator that formats output for JSON
-
-    Given a function that will return content, this decorator will turn
-    the result into JSON, with a content-type of 'application/json' and
-    output it.
-    """
-    def tojson(**kwargs):
-        try:
-            data = action(**kwargs)
-        except Exception, e:
-            data = {'error':str(e)}
-            log_error(e)
-        bottle.response.content_type = 'application/json'
-        return simplejson.dumps(data)
-    return tojson
-
-
 @bottle.route('/api/create', method="POST")
-@jsonify
 def create():
     rdb.cleanup(60*60)
     apikey = bottle.request.params.get('apikey','')
@@ -112,7 +94,6 @@ def create():
 
 
 @bottle.route('/api/r:rid:[0-9]+:/setup', method='POST')
-@jsonify
 def configure(rid):
     """ Accesses the resource configuration and functions """
     if bottle.request.params.get('apikey','') not in apikeys:
@@ -133,7 +114,6 @@ def configure(rid):
 
 
 @bottle.route('/api/r:rid:[0-9]+:/:query:[a-z_]+:', method='POST')
-@jsonify
 def query(rid, query):
     """ Accesses the resource configuration and functions """
     if bottle.request.params.get('apikey','') not in apikeys:
@@ -159,7 +139,6 @@ def query(rid, query):
 
 @bottle.route('/api/r:rid:[0-9]+:/help', method='GET')
 @bottle.route('/api/r:rid:[0-9]+:/help/:query:[a-z_]+:', method='GET')
-@jsonify
 def help(rid, query=None):
     r = rdb.fetch(int(rid),None)
     if query:
@@ -170,7 +149,6 @@ def help(rid, query=None):
 
 
 @bottle.route('/api/r:rid:[0-9]+:')
-@jsonify
 def info(rid):
     r = rdb.fetch(int(rid),None)
     if not r:
@@ -243,9 +221,11 @@ def render(rid, x, y, w, h, f):
 def index():
     return bottle.template('seqgui')
 
+
 @bottle.route('/:filename:(js|jquery|css|test)/.+:')
 def static(filename):
     bottle.send_file(filename=filename, root=resource_path + '/static_files')
+
 
 @bottle.route('/clean')
 def cleanup():
@@ -253,10 +233,5 @@ def cleanup():
     return "done"
 
 
-def serve():
-    bottle.run(server=bottle.PasteServer, host='0.0.0.0', port=8080)
-    rdb.cleanup(0)
-    return 0
-    
 if __name__ == '__main__':
     sys.exit(serve())
