@@ -83,7 +83,7 @@ class ResourceManager(object):
             fname = os.path.join(self.savepath, "%d.res" % rid)
             with open(fname, 'wb') as f:
                 r.touch()
-                pickle.dump(r, f)
+                pickle.dump(r, f, -1)
             self.db[rid] = (r.__class__, r.atime, fname)
 
     def fetch(self, rid, *a):
