@@ -489,7 +489,7 @@ Lucullus.ViewMap.prototype.refresh = function () {
         this.clipping[2] = Math.min(width+ox, this.manclipp[2])
         this.clipping[3] = Math.min(height+oy, this.manclipp[3])
         this.imgurl = function(numberx, numbery, sizex, sizey) {
-            return self.view.api.server + '/r' + self.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png'
+            return self.view.api.server + '/r' + self.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png?mtime=' + self.view.mtime
         }
     } else {
         this.node.empty()

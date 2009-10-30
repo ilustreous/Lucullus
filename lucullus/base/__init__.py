@@ -45,12 +45,11 @@ class RenderContext(object):
         georemtry and cairo helper methods. This is passed to plugins on a 
         BaseView.render() call.
     """
-    def __init__(self, top=0, left=0, zoom=0, width=256, height=246, format='png'):
+    def __init__(self, top=0, left=0, width=256, height=246, format='png'):
         self.top = top
         self.left = left
         self.width = width
         self.height = height
-        self.zoom = zoom
         self.format = format.lower()
         self._surface = None
         self._context = None
@@ -82,7 +81,7 @@ class RenderContext(object):
         if not self._surface:
             if self.format in ('png'):
                 self._surface = cairo.ImageSurface(cairo.FORMAT_RGB24,
-                                                   self.width, self.height)
+                                self.width, self.height)
             else:
                 raise NotImplementedError("Format %s is not supported." %
                                           self.format)
@@ -207,7 +206,7 @@ class BaseResource(object):
 
     def state(self):
         """ Should return a dict with some infos about this resource """
-        return {}
+        return {'mtime':self.mtime, 'atime':self.atime, 'api':self.api, 'id':self.id}
 
     def prepare(self):
         """ Called on resource creation """
@@ -269,9 +268,11 @@ class BaseView(BaseResource):
         return (0,0)
 
     def state(self):
+        state = super(BaseView, self).state()
         w, h = self.size()
         ox, oy = self.offset()
-        return {'width':w, 'height':h, 'offset':[ox, oy], 'size':[w, h]}
+        state.update({'width':w, 'height':h, 'offset':[ox, oy], 'size':[w, h]})
+        return state
 
     def render(self, ra):
         """ Renders into a RenderArea cairo context. """
@@ -302,6 +303,7 @@ class IndexView(BaseView):
         self.fontsize = int(options.get('fontsize', self.fontsize))
         if 'keys' in options and isinstance(options['keys'], list):
             self.index = map(str, options['keys'])
+        self.touch()
 
     def render(self, rc):
         # Shortcuts
@@ -324,6 +326,7 @@ class IndexView(BaseView):
 
         # Fill the background with #ffffff
         rc.clear(*self.color.get('background',(1,1,1,1)))
+        if self.fontsize <= 6: return self #No need to render text
         rc.set_color(*self.color.get('fontcolor',(0,0,0,1)))
         font_extends = c.font_extents()
 
@@ -339,7 +342,6 @@ class IndexView(BaseView):
 
 class RulerView(BaseView):
     def prepare(self):
-        self.step       = 14
         self.marks      = 1
         self.digits     = 10
         self.fontsize   = 12
@@ -347,10 +349,10 @@ class RulerView(BaseView):
         self.color['fontcolor'] = color.get('css','white')
 
     def configure(self, **options):
-        self.step       = int(options.get('step', self.step))
         self.marks      = int(options.get('marks', self.marks))
         self.digits     = int(options.get('digits', self.digits))
         self.fontsize   = int(options.get('fontsize', self.fontsize))
+        self.touch()
 
     def size(self):
         return (2**32, self.fontsize + 5)
@@ -361,8 +363,8 @@ class RulerView(BaseView):
     def render(self, rc):
         c = rc.context
 
-        first = rc.left - rc.left % self.step
-        last = rc.right + rc.right % self.step
+        first = rc.left - rc.left % self.fontsize
+        last = rc.right + rc.right % self.fontsize
         rc.clear(*color.get('css','white'))
 
         fo = cairo.FontOptions()
@@ -374,17 +376,18 @@ class RulerView(BaseView):
         font_extends = c.font_extents()
 
         rc.set_color(*color.get('css', 'black'))
-        for mark in xrange(first - self.step*self.digits, last + self.step*self.digits, self.step):
-            if (mark % (self.step * self.digits)) == 0:
-                name = str(mark / self.step)
-                text_width, text_height = c.text_extents(name)[2:4]
-                c.move_to(mark - text_width/2, font_extends[3])
-                c.show_text(name)
+        if self.fontsize > 6:
+            for mark in xrange(first - self.fontsize*self.digits, last + self.fontsize*self.digits, self.fontsize):
+                if (mark % (self.fontsize * self.digits)) == 0:
+                    name = str(mark / self.fontsize)
+                    text_width, text_height = c.text_extents(name)[2:4]
+                    c.move_to(mark - text_width/2, font_extends[3])
+                    c.show_text(name)
 
-        for mark in xrange(first, last, self.step):
-            if (mark % (self.step * self.marks)) == 0:
+        for mark in xrange(first, last, self.fontsize):
+            if (mark % (self.fontsize * self.marks)) == 0:
                 c.rectangle(mark, font_extends[3]+4, 1, rc.height)
-            if (mark % (self.step * self.digits)) == 0:
+            if (mark % (self.fontsize * self.digits)) == 0:
                 c.rectangle(mark, font_extends[3]+2, 2, rc.height)
             c.fill()
 

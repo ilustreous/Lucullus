@@ -347,7 +347,7 @@ function SeqDataTable(api, root) {
     this.eIndex2Map = new Lucullus.ViewMap(this.nIndex2,
         this.api.create('Index', {'fontsize': this.lZoom}))
     this.eRulerMap = new Lucullus.ViewMap(this.nRuler,
-        this.api.create('Ruler', {'fontsize':Math.floor(this.lZoom*0.8), 'step':this.lZoom}))
+        this.api.create('Ruler', {'fontsize':Math.floor(this.lZoom*0.8)}))
 
     this.eSeqMap.cMove = function() { 
         self.update_slider()
@@ -381,6 +381,26 @@ SeqDataTable.prototype.status = function(txt) {
     this.eStatus.text(txt)
 }
 
+SeqDataTable.prototype.zoom = function(value) {
+    this.lZoom = value
+    var self = this
+    this.eRulerMap.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
+        self.eRulerMap.refresh()
+    })
+    this.eSeqMap.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
+        self.eSeqMap.refresh()
+    })
+    this.eSeq2Map.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
+        self.eSeq2Map.refresh()
+    })
+    this.eIndexMap.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
+        self.eIndexMap.refresh()
+    })
+    this.eIndex2Map.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
+        self.eIndex2Map.refresh()
+    })
+}
+
 SeqDataTable.prototype.on_close = function() {
     this.eRulerMap.view.close()
     this.eSeqMap.view.close()
@@ -397,6 +417,7 @@ SeqDataTable.prototype.update_slider = function() {
         this.nVSlider.slider('value', this.eSeqMap.view.rows - y)
     }
 }
+
 SeqDataTable.prototype.resize = function(sw, sh) {
     // Firefox bug...
     this.nTable.css('border-collapse','separate').css('border-collapse','collapse')

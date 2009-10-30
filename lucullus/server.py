@@ -147,8 +147,8 @@ def info(rid):
 
 
 #/image/r1234/index/x256y512z0w256h256.png
-@bottle.route('/api/r:rid:[0-9]+:/(x:x:[0-9]+:)?(y:y:[0-9]+:)?(z:z:[0-9]+:)?(w:w:[0-9]+:)?(h:h:[0-9]+:)?\.:format:(png):')
-def render(rid, channel='default', x='0', y='0', z='0', w='256', h='256', format='png'):
+@bottle.route('/api/r:rid:[0-9]+:/(x:x:[0-9]+:)?(y:y:[0-9]+:)?(w:w:[0-9]+:)?(h:h:[0-9]+:)?\.:format:(png):')
+def render(rid, channel='default', x='0', y='0', w='256', h='256', format='png'):
     ts = time.time()
     r = rdb.fetch(int(rid), None)
     if not r:
@@ -157,22 +157,20 @@ def render(rid, channel='default', x='0', y='0', z='0', w='256', h='256', format
         raise bottle.abort(404, "This resource has no visuals")
 
     try:
-        x,y,z,w,h = map(lambda x: x and int(x) or 0, (x,y,z,w,h))
+        x,y,w,h = map(lambda x: x and int(x) or 0, (x,y,w,h))
     except:
         bottle.abort(500, "Cannot parse input parameters. Use numeric values for x,y,z,w and h")
 
     if w < 16 or h < 16 or w > 1024 or h > 1024:
         bottle.abort(500, "Image size to big or to small")
-    if z < 0:
-        bottle.abort(500, "Negative zoom is impossible")
     if format not in ('png'):
         bottle.abort(500, "Image format not supported.")
 
     # Send cached file to client
-    filename = '/tmp/lucullus/image_%s_%s_mtime%dx%dy%dz%dw%dh%d.%s' % (rid,channel,int(r.mtime),x,y,z,w,h,format)
+    filename = '/tmp/lucullus/image_%s_%s_mtime%dx%dy%dw%dh%d.%s' % (rid,channel,int(r.mtime),x,y,w,h,format)
     ts2 = time.time()
     if not os.path.exists(filename):
-        rc = RenderContext(left=x, top=y, width=w, height=h, zoom=z, format=format)
+        rc = RenderContext(left=x, top=y, width=w, height=h, format=format)
         try:
             try: os.makedirs(dirname(filename))
             except OSError: pass

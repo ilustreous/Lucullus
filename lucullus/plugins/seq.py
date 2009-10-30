@@ -34,19 +34,20 @@ class SequenceResource(base.BaseView):
 		self.fontsize = 12
 		self.len = 0
 
-
+	
 	def configure(self, **options):
 		self.fontsize = int(options.get('fontsize', self.fontsize))
 		self.source = options.get('source', self.source)
 		self.format = options.get('format', self.format)
 		if 'source' in options:
 			self.api_load(source=self.source, format=self.format)
+		self.touch()
 
-
+	
 	def size(self):
 		return (self.cols*self.fontsize, self.rows*self.fontsize)
 
-
+	
 	def state(self):
 		s = super(SequenceResource, self).state()
 		s['len'] = self.len
@@ -57,7 +58,7 @@ class SequenceResource(base.BaseView):
 		s['format'] = self.format
 		return s
 
-
+	
 	def api_load(self, source, format='fasta'):
 		if source.startswith("http://"):
 			try:
@@ -68,7 +69,7 @@ class SequenceResource(base.BaseView):
 			self.format = format
 		else:
 			raise base.ResourceQueryError('Unsupported protocol or uri syntax: %s' % source)
-
+		
 		try:
 			seq = SeqIO.parse(StringIO(data), self.format)
 		except Exception, e:
@@ -83,20 +84,20 @@ class SequenceResource(base.BaseView):
 		self.len = self.rows
 		self.touch()
 
-
+	
 	def api_position(self, **options):
 		col = abs(int(options.get('column',0)))
 		row = abs(int(options.get('row',0)))
 		return {"x":self.fontsize * col, "y":self.fontsize * row}
 
-
+	
 	def api_search(self, **options):
 		''' Search for a sequence name.
 		    @param query Search string.
 		    @param limit Number of matches to return
 			@return matches List of matches {key:string, position:int}
 			@return count Total number of seuquces
-			
+		    
 		    Search string syntax:
 		      '*' matches everything
 		      '?' matches any single character
@@ -116,7 +117,7 @@ class SequenceResource(base.BaseView):
 			return self.api_search(query=q+'*', limit=limit)
 		return {'matches':matches, 'count':len(self.keys)}
 
-
+	
 	def api_posinfo(self, **options):
 		col = int(math.floor(float(options.get('x',0)) / self.fontsize))
 		row = int(math.floor(float(options.get('y',0)) / self.fontsize))
@@ -131,11 +132,11 @@ class SequenceResource(base.BaseView):
 		spos = min(col+1, len(seq)) - seq.count('-', 0, col+1)
 		return {"key":key, "seqpos":spos, "value":val}
 
-
+	
 	def api_keys(self):
 		return {"keys":self.keys}
 
-
+	
 	def render(self, rc):
 		# Shortcuts
 		c = rc.context
@@ -149,7 +150,7 @@ class SequenceResource(base.BaseView):
 		c.set_font_options(options)
 		c.set_font_size(self.fontsize - 1)
 		lineheight = c.font_extents()[1]
-
+		
 		# Rows to consider
 		row_first = int(math.floor( float(rc.top) / self.fontsize))
 		row_last  = int(math.ceil(	float(rc.bottom) / self.fontsize))
@@ -161,7 +162,7 @@ class SequenceResource(base.BaseView):
 		# Draw background
 		base.renderer.draw_stripes(c, rc.left, rc.top, rc.width, rc.height,
 		(self.fontsize*10), color.get('bio','amino-section1'), color.get('bio','amino-section2'))
-
+		
 		# Draw data
 		for row in range(row_first, row_last):
 			try:
@@ -174,11 +175,16 @@ class SequenceResource(base.BaseView):
 			for col in range(col_first, col_last):
 				char = data[col - col_first]
 				(r,g,b,a) = color.get('bio', 'amino-%s' % char, (0,0,0,1))
-				c.set_source_rgba(r,g,b,a)
-				char_padding_left, char_padding_top, char_width, char_height = c.text_extents(char)[0:4]
-				x = self.fontsize * col + float(self.fontsize - char_width - char_padding_left)/2
-				c.move_to(x, y)
-				c.show_text(char)
+				if self.fontsize > 6:
+					c.set_source_rgba(r,g,b,a)
+					char_padding_left, char_padding_top, char_width, char_height = c.text_extents(char)[0:4]
+					x = self.fontsize * col + float(self.fontsize - char_width - char_padding_left)/2
+					c.move_to(x, y)
+					c.show_text(char)
+				else:
+					c.set_source_rgba(r,g,b,0.5)
+					c.rectangle(self.fontsize * col, self.fontsize * row, self.fontsize, self.fontsize)
+					c.fill()
 		return self
 
 
@@ -196,7 +202,7 @@ class SequenceResource(base.BaseView):
 
 
 
-"""		
+"""
 	def _parse_groups(self, line, offset = 0):
 		'''Parses a string and searches blocks of the same char.
 				returns a list of (char, start, len) triples'''
@@ -214,19 +220,19 @@ class SequenceResource(base.BaseView):
 				current = s
 		groups.append((current, start, size))
 		return groups
-
+	
 	def _render_dna(self, data, context):
 		((vx,vy),(vw,vh))	= self.view
 		((ax,ay),(aw,ah))	= self.area
 		fieldsize			= self.fieldsize
 		c					= context
-
+		
 		# Data area to consider
 		col_first = int(math.floor( float(vx-ax)	/ fieldsize))
 		col_last  = int(math.ceil(	float(vx-ax+vw) / fieldsize))
-
+		
 		data = self._parse_groups(data)
-
+		
 		for (code, start, size) in data:
 			if start > col_last:
 				break
@@ -241,7 +247,7 @@ class SequenceResource(base.BaseView):
 				rry = 0.5
 				border = 1.0
 				(r,g,b,a) = color.get(code,(0,0,0,1))
-
+				
 				c.set_source_rgba(r,g,b,a)
 				i = random.randint(0,3)
 				if True or i == 1:
@@ -253,7 +259,7 @@ class SequenceResource(base.BaseView):
 					#cairo_pattern_add_color_stop_rgba (pat, 1, 0, 0, 0, 1);
 					#cairo_pattern_add_color_stop_rgba (pat, 0, 1, 1, 1, 1);
 
-
+					
 					shapes.path_tube(c,x,y,w,h,border)
 					c.fill()
 				elif i==2:
@@ -261,6 +267,6 @@ class SequenceResource(base.BaseView):
 				else:
 					c.rectangle(x+border,y+ry/2+border,w-border*2,h-ry-border*2)
 				c.fill()
-				
+
 
 """
