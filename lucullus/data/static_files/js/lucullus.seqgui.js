@@ -37,9 +37,13 @@ function SeqGui(api) {
     this.nTabs.append($('<a>Search</a>').click(function(){
         self.eSearch.show()
     }))
+    this.nTabs.append($('<a>Settings</a>').click(function(){
+        self.eSettings.show()
+    }))
     this.nTabs.append($('<a>Help</a>').click(function(){
         self.eHelp.show()
     }))
+    
     this.nTabs.find('a').addClass('tab').attr('href','#')
     /*this.nTabs.find('a').click(function(e) {
         var n = $(this).prevAll().length
@@ -58,6 +62,7 @@ function SeqGui(api) {
 
     this.eData = new SeqDataTable(this.api, this.nData)
     this.eHelp = new SeqHelpDialog()
+    this.eSettings = new SeqSettingsDialog(this.eData)
     this.eUpload = new SeqUploadDialog(function(file, type, compression) {
         self.upload(file, type, compression)
     })
@@ -107,7 +112,20 @@ SeqGui.prototype.on_resize = function(w, h) {
     this.eData.resize(Math.floor(x), Math.floor(y))
 }
 
-function SeqHelpDialog(root) {
+SeqGui.prototype.zoom = function(value) {
+    return this.eData.zoom(value)
+}
+
+
+
+
+
+
+
+
+
+
+function SeqHelpDialog() {
     this.nRoot = $('<div />').attr('title','Help').dialog({
         autoOpen: false, buttons: {
             Ok: function() {
@@ -120,6 +138,66 @@ function SeqHelpDialog(root) {
 
 SeqHelpDialog.prototype.show = function() {this.nRoot.dialog('open', true)}
 SeqHelpDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
+
+
+
+
+
+
+
+
+
+
+function SeqSettingsDialog(eData) {
+    this.eData = eData
+    var self = this
+    this.nRoot = $('<div />').attr('title','Settings').dialog({
+        autoOpen: false, buttons: {
+            Ok: function() {
+                $(this).dialog('close');
+            }
+        }
+    })
+    this.nZoomSlider = $('<div />')
+    this.nRoot.append($('<h2>Zoom: <span class="zoomlevel">12</span></h2>'))
+    this.nRoot.append(this.nZoomSlider)
+    this.nZoomSlider.slider({
+        min:1, max:24,
+        stop: function(e, ui) {
+            self.eData.zoom(Math.ceil(ui.value))
+        },
+        slide: function(e, ui) {
+            self.nRoot.find('span.zoomlevel').html(Math.ceil(ui.value))
+        }})
+    this.nIndexCheckbox = $('<input type="checkbox" value="yes" />')
+    this.nRoot.append($('<h2>View:</h2>'))
+    this.nRoot.append(this.nIndexCheckbox)
+    this.nIndexCheckbox.attr('checked', this.eData.lIndexWidth ? true : false)
+    this.nIndexCheckbox.change(function(e) {
+        if(this.checked) {
+            self.eData.lIndexWidth = 100
+            self.eData.refresh()
+        } else {
+            self.eData.lIndexWidth = 0            
+            self.eData.refresh()
+        }
+    })
+}
+
+SeqSettingsDialog.prototype.show = function() {
+    this.nRoot.dialog('open', true)
+    this.nZoomSlider.slider('value', this.eData.lZoom)
+    this.nRoot.find('h2 span').html(this.eData.lZoom)
+}
+SeqSettingsDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
+
+
+
+
+
+
+
+
 
 
 function SeqUploadDialog(on_upload) {
@@ -179,6 +257,13 @@ SeqUploadDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
 SeqUploadDialog.prototype.status = function(msg) {
     this.nStatus.text(msg)
 }
+
+
+
+
+
+
+
 
 
 
@@ -259,6 +344,12 @@ SeqSearchDialog.prototype.hide = function() {this.nRoot.dialog('close', true)}
 
 
 
+
+
+
+
+
+
 function SeqDataTable(api, root) {
     var self = this
     // Settings
@@ -271,6 +362,8 @@ function SeqDataTable(api, root) {
     this.lRulerHeight = 20 // height if ruler rw
     this.lSliderWidth = 16
     this.lSliderHeight = 16
+    this.lTableWidth = 0
+    this.lTableHeight = 0
     
     // Settings
     this.sShowCompare = false
@@ -383,12 +476,18 @@ SeqDataTable.prototype.status = function(txt) {
 
 SeqDataTable.prototype.zoom = function(value) {
     this.lZoom = value
+    var size = this.eSeqMap.get_datasize()
+    var pos = this.eSeqMap.get_position()
+
     var self = this
     this.eRulerMap.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
         self.eRulerMap.refresh()
     })
     this.eSeqMap.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
         self.eSeqMap.refresh()
+        var nsize = self.eSeqMap.get_datasize()
+        var foo = [Math.floor(pos[0]*nsize[0]/size[0]), Math.floor(pos[1]*nsize[1]/size[1])]
+        self.ml.move_to(-foo[0], -foo[1])
     })
     this.eSeq2Map.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
         self.eSeq2Map.refresh()
@@ -399,6 +498,7 @@ SeqDataTable.prototype.zoom = function(value) {
     this.eIndex2Map.view.query('setup', {'fontsize':this.lZoom}).wait(function(){
         self.eIndex2Map.refresh()
     })
+
 }
 
 SeqDataTable.prototype.on_close = function() {
@@ -418,9 +518,15 @@ SeqDataTable.prototype.update_slider = function() {
     }
 }
 
+SeqDataTable.prototype.refresh = function() {
+    this.resize(this.lTableWidth, this.lTableHeight)
+}
+
 SeqDataTable.prototype.resize = function(sw, sh) {
     // Firefox bug...
     this.nTable.css('border-collapse','separate').css('border-collapse','collapse')
+    this.lTableWidth = sw
+    this.lTableHeight = sh
     // Wether the table element resizes
     var ch = this.lZoom
     if(!this.sShowCompare) ch = 0

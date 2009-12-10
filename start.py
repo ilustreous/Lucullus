@@ -14,4 +14,4 @@ logging.basicConfig(level=logging.DEBUG, stream=sys.stderr, format=format)
 import bottle
 bottle.debug(True)
 import lucullus.server
-bottle.run(server=bottle.PasteServer, host='0.0.0.0', port=8080, reloader=True)
+bottle.run(server=bottle.PasteServer, host='0.0.0.0', port=8080)

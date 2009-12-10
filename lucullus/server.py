@@ -1,134 +1,92 @@
-import bottle
-import sys
-from os.path import abspath, join, dirname, basename
-from lucullus import base
-from lucullus.base import config, RenderContext
-import lucullus.base
-import cairo
-import simplejson
-import logging
-import mimetypes
-import os
-import lucullus.plugins.seq
+import os, os.path
 import time
-import random
-import traceback
 import rfc822
+import bottle
+from bottle import route, HTTPError
+import logging
+import lucullus.render
+import lucullus.render.geometry
+import lucullus.resource
+import lucullus.plugins.base
+import lucullus.plugins.seq
 
-bottle.debug(True)
 
 log = logging.getLogger("lucullus")
-
-
 log.debug("Starting server")
 sessions = {}
-resource_path = abspath(join(dirname(__file__), './data'))
-bottle.TEMPLATE_PATH.insert(0,abspath(join(dirname(__file__), './views'))+'/')
+basepath = os.path.abspath(os.path.dirname(__file__))
+resource_path = os.path.join(basepath, 'data')
+bottle.TEMPLATE_PATH.insert(0,os.path.join(basepath, 'views/'))
 log.debug("Template Path: %s", bottle.TEMPLATE_PATH)
 
-"""
-Masterplan:
-Sessions verschwinden. Connect entfaellt. Es gibt nur noch Resourcen und Views.
-Resourcen sind mutable Objekte die komplett gepickelt werden.
-Views sind das gleiche, haben aber eine render() methode.
-
->>> /api/create type(resource), apikey, **args 
-<<< {"id": #, "state": {...}, "api": [list-of-api-functions]}
-Erschafft eine neue resource
-
-/api/r123456
-Wirft statistiken ueber die resource aus, kann jeder machen
-
-/api/r123456/setup apikey
-Konfiguriert eine Ressource
-
-/api/r123456/... apikey **args
-Ruft eine Methode der resource auf
-
-
-Nur Views:
-/api/r123456/render apikey x y w h f
-Rendert ein Bild
-
-"""
-
 apikeys = ['test']
-rdb = lucullus.base.ResourceManager(resource_path)
-rdb.add_plugin('Sequence', lucullus.plugins.seq.SequenceResource)
-rdb.add_plugin('Index', lucullus.base.IndexView)
-rdb.add_plugin('Ruler', lucullus.base.RulerView)
+rdb = lucullus.resource.Pool(resource_path)
+rdb.install('Sequence', lucullus.plugins.seq.SequenceResource)
+rdb.install('Index', lucullus.plugins.base.IndexView)
+rdb.install('Ruler', lucullus.plugins.base.RulerView)
 
-def log_error(e):
-    err = "Exception: %s\n" % (repr(e))
-    err += "<h2>Traceback:</h2>\n<pre>\n"
-    err += traceback.format_exc(10)
-    err += "\n</pre>"
-    log.debug(err)
-    
 
-@bottle.route('/api/create', method="POST")
+
+@route('/api/create', method="POST")
 def create():
     rdb.cleanup(60*60)
-    apikey = bottle.request.params.get('apikey','')
-    r_type = bottle.request.params.get('type','txt')
-    options = dict(bottle.request.params)
+    apikey = bottle.request.POST.get('apikey','')
+    r_type = bottle.request.POST.get('type','txt')
+    options = dict(bottle.request.POST)
     del options['apikey']
     del options['type']
     if apikey not in apikeys:
-        bottle.abort(401, 'You have to provide a valid api key')
+        return HTTPError(401, 'You have to provide a valid api key')
     try:
         r = rdb.create(r_type, **options)
-    except lucullus.base.PluginNotFoundError:
-        bottle.abort(403, 'The requestet resource type is not available. Please coose from ths list: '+', '.join(rdb.plugins.keys()))
+    except lucullus.resource.ResourceTypeNotFound:
+        return HTTPError(403, 'The requestet resource type is not available. Please coose from ths list: '+', '.join(rdb.plugins.keys()))
     return {"id": r.id, "state": r.state(), "methods": r.api}
 
 
-@bottle.route('/api/r:rid:[0-9]+:/setup', method='POST')
+@route('/api/r:rid#[0-9]+#/setup', method='POST')
 def configure(rid):
     """ Accesses the resource configuration and functions """
-    if bottle.request.params.get('apikey','') not in apikeys:
-        bottle.abort(401, 'You have to provide a valid api key')
-
+    if bottle.request.POST.get('apikey','') not in apikeys:
+        return HTTPError(401, 'You have to provide a valid api key')
     r = rdb.fetch(int(rid),None)
     if not r:
-        bottle.abort(404, 'Resource not found')
-
-    options = dict(bottle.request.params)
+        return HTTPError(404, 'Resource not found')
+    options = dict(bottle.request.POST)
     del options['apikey']
-
     try:
         r.configure(**options)
         return {"id": r.id, "state": r.state()}
-    except base.ResourceError, e:
+    except lucullus.resource.ResourceError, e:
         return {'id': r.id, 'error': repr(e)}
 
 
-@bottle.route('/api/r:rid:[0-9]+:/:query:[a-z_]+:', method='POST')
+@route('/api/r:rid#[0-9]+#/:query#[a-z_]+#', method='POST')
 def query(rid, query):
     """ Accesses the resource configuration and functions """
-    if bottle.request.params.get('apikey','') not in apikeys:
-        bottle.abort(401, 'You have to provide a valid api key')
+    if bottle.request.POST.get('apikey','') not in apikeys:
+        return HTTPError(401, 'You have to provide a valid api key')
 
     r = rdb.fetch(int(rid),None)
     if not r:
-        bottle.abort(404, 'Resource not found')
+        return HTTPError(404, 'Resource not found')
 
-    options = dict(bottle.request.params)
+    options = dict(bottle.request.POST)
     del options['apikey']
 
     if not r:
-        bottle.abort(404, 'Resource not found')
+        return HTTPError(404, 'Resource not found')
     try:
         answer = r.query(query, **options)
         answer['id'] = r.id
         answer['state'] = r.state()
         return answer
-    except base.ResourceError, e:
+    except lucullus.resource.ResourceError, e:
         return {'id': rid, 'error': repr(e)}
 
 
-@bottle.route('/api/r:rid:[0-9]+:/help', method='GET')
-@bottle.route('/api/r:rid:[0-9]+:/help/:query:[a-z_]+:', method='GET')
+@route('/api/r:rid#[0-9]+#/help', method='GET')
+@route('/api/r:rid#[0-9]+#/help/:query#[a-z_]+#', method='GET')
 def help(rid, query=None):
     r = rdb.fetch(int(rid),None)
     if query:
@@ -138,41 +96,39 @@ def help(rid, query=None):
     return {'api':api}
 
 
-@bottle.route('/api/r:rid:[0-9]+:')
+@route('/api/r:rid#[0-9]+#')
 def info(rid):
     r = rdb.fetch(int(rid),None)
     if not r:
-        bottle.abort(404, 'Resource not found')
+        return HTTPError(404, 'Resource not found')
     return {"id": rid, "state": r.state()}
 
 
-#/image/r1234/index/x256y512z0w256h256.png
-@bottle.route('/api/r:rid:[0-9]+:/(x:x:[0-9]+:)?(y:y:[0-9]+:)?(w:w:[0-9]+:)?(h:h:[0-9]+:)?\.:format:(png):')
-def render(rid, channel='default', x='0', y='0', w='256', h='256', format='png'):
+@route('/api/r:rid#[0-9]+#/:channel#[a-z]+#-:x#[0-9]+#-:y#[0-9]+#-:w#[0-9]+#-:h#[0-9]+#.:format#png#')
+@bottle.validate(x=int, y=int, w=int, h=int)
+def render(rid, channel, x, y, w, h, format):
     ts = time.time()
     r = rdb.fetch(int(rid), None)
     if not r:
-        bottle.abort(404, 'Resource not found')
-    if not isinstance(r, base.BaseView):
-        raise bottle.abort(404, "This resource has no visuals")
-
+        return HTTPError(404, 'Resource not found')
+    if not isinstance(r, lucullus.resource.BaseView):
+        return HTTPError(404, "This resource has no visuals")
     try:
         x,y,w,h = map(lambda x: x and int(x) or 0, (x,y,w,h))
     except:
-        bottle.abort(500, "Cannot parse input parameters. Use numeric values for x,y,z,w and h")
-
+        return HTTPError(500, "Cannot parse input parameters. Use numeric values for x,y,z,w and h")
     if w < 16 or h < 16 or w > 1024 or h > 1024:
-        bottle.abort(500, "Image size to big or to small")
+        return HTTPError(500, "Image size to big or to small")
     if format not in ('png'):
-        bottle.abort(500, "Image format not supported.")
-
+        return HTTPError(500, "Image format not supported.")
     # Send cached file to client
     filename = '/tmp/lucullus/image_%s_%s_mtime%dx%dy%dw%dh%d.%s' % (rid,channel,int(r.mtime),x,y,w,h,format)
     ts2 = time.time()
     if not os.path.exists(filename):
-        rc = RenderContext(left=x, top=y, width=w, height=h, format=format)
+        area = lucullus.render.geometry.Area(left=x, top=y, width=w, height=h)
+        rc = lucullus.render.Target(area=area, format=format)
         try:
-            try: os.makedirs(dirname(filename))
+            try: os.makedirs(os.path.dirname(filename))
             except OSError: pass
             with open(filename, "wb") as io:
                 r.render(rc)
@@ -183,30 +139,23 @@ def render(rid, channel='default', x='0', y='0', w='256', h='256', format='png')
         except Exception, e:
             log.exception("Rendering failed!")
             raise
-
-        
-    bottle.response.content_type = "image/%s" % format
     bottle.response.header['X-Copyright'] = "Max Planck Institut (MPIBPC Goettingen) Marcel Hellkamp"
     bottle.response.header['X-CPUTIME'] = "render: %f all: %f" % (time.time() - ts2, time.time() - ts)
     bottle.response.header['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
-    bottle.send_file(filename=basename(filename), root=dirname(filename))
+    return bottle.static_file(filename=os.path.basename(filename), root=os.path.dirname(filename), mimetype="image/%s" % format)
 
 
-@bottle.route('/')
+@route('/')
 def index():
     return bottle.template('seqgui')
 
 
-@bottle.route('/:filename:(js|jquery|css|test)/.+:')
+@route('/:filename#(js|jquery|css|test)/.+#')
 def static(filename):
-    bottle.send_file(filename=filename, root=resource_path + '/static_files')
+    return bottle.static_file(filename=filename, root=resource_path + '/static_files')
 
 
-@bottle.route('/clean')
+@route('/clean')
 def cleanup():
     rdb.cleanup(10)
     return "done"
-
-
-if __name__ == '__main__':
-    sys.exit(serve())

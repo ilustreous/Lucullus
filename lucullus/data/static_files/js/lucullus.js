@@ -451,6 +451,8 @@ Lucullus.ViewMap = function (root, view) {
 
 Lucullus.ViewMap.prototype.resize = function(w, h) {
     // Resizes the map node
+    w = w ? w : 0
+    h = h ? h : 0
     this.node.width(w)
     this.node.height(h)
     var tiles_x = Math.ceil(w / this.tilesize[0] ) + 1 + this.overlap * 2
@@ -489,7 +491,7 @@ Lucullus.ViewMap.prototype.refresh = function () {
         this.clipping[2] = Math.min(width+ox, this.manclipp[2])
         this.clipping[3] = Math.min(height+oy, this.manclipp[3])
         this.imgurl = function(numberx, numbery, sizex, sizey) {
-            return self.view.api.server + '/r' + self.view.id + '/x'+(numberx*sizex)+'y'+(numbery*sizey)+'w'+sizex+'h'+sizey+'.png?mtime=' + self.view.mtime
+            return self.view.api.server + '/r' + self.view.id + '/default-'+(numberx*sizex)+'-'+(numbery*sizey)+'-'+sizex+'-'+sizey+'.png?mtime=' + self.view.mtime
         }
     } else {
         this.node.empty()
@@ -556,6 +558,8 @@ Lucullus.ViewMap.prototype.set_clipping = function(x,y,w,h) {
 
 Lucullus.ViewMap.prototype.normalise_move = function(dx,dy) {
     /* Normalizes a movement (clipping) */
+    if(!dx) dx=0
+    if(!dy) dy=0
     dx = Math.min(- this.clipping[0], Math.max(this.mapsize[0] - this.clipping[2], this.offset[0] + Math.round(dx))) - this.offset[0]
     dy = Math.min(- this.clipping[1], Math.max(this.mapsize[1] - this.clipping[3], this.offset[1] + Math.round(dy))) - this.offset[1]
     return [dx, dy].slice()

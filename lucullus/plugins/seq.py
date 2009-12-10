@@ -16,14 +16,12 @@ import urllib2
 from StringIO import StringIO
 import fnmatch
 
-from lucullus import base
-from lucullus.base import renderer, color
-from lucullus.base import shapes
+from lucullus.resource import BaseView
 from Bio import SeqIO, Seq, SeqRecord
 
 
 
-class SequenceResource(base.BaseView):
+class SequenceResource(BaseView):
 	def prepare(self):
 		self.sequences = []
 		self.keys = []
@@ -140,6 +138,7 @@ class SequenceResource(base.BaseView):
 	def render(self, rc):
 		# Shortcuts
 		c = rc.context
+		area = rc.area
 		
 		# Configuration
 		c.select_font_face("mono",cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
@@ -152,16 +151,15 @@ class SequenceResource(base.BaseView):
 		lineheight = c.font_extents()[1]
 		
 		# Rows to consider
-		row_first = int(math.floor( float(rc.top) / self.fontsize))
-		row_last  = int(math.ceil(	float(rc.bottom) / self.fontsize))
+		row_first = int(math.floor( float(area.top) / self.fontsize))
+		row_last  = int(math.ceil(	float(area.bottom) / self.fontsize))
 		row_last  = min(row_last, self.rows)
-		col_first = int(math.floor( float(rc.left) / self.fontsize))
-		col_last  = int(math.ceil(	float(rc.right) / self.fontsize))
+		col_first = int(math.floor( float(area.left) / self.fontsize))
+		col_last  = int(math.ceil(	float(area.right) / self.fontsize))
 		#col_last  = min(col_last, self.cols)
 		
 		# Draw background
-		base.renderer.draw_stripes(c, rc.left, rc.top, rc.width, rc.height,
-		(self.fontsize*10), color.get('bio','amino-section1'), color.get('bio','amino-section2'))
+		rc.draw_stripes(self.fontsize*10, 'bio.amino-section1', 'bio.amino-section2')
 		
 		# Draw data
 		for row in range(row_first, row_last):
@@ -172,17 +170,17 @@ class SequenceResource(base.BaseView):
 			# Fill with dashes
 			data += '-' * (col_last - col_first - len(data))
 			y = (row+1) * self.fontsize - lineheight
+			cache = dict()
 			for col in range(col_first, col_last):
 				char = data[col - col_first]
-				(r,g,b,a) = color.get('bio', 'amino-%s' % char, (0,0,0,1))
+				rc.set_color('bio.amino-%s' % char)
 				if self.fontsize > 6:
-					c.set_source_rgba(r,g,b,a)
-					char_padding_left, char_padding_top, char_width, char_height = c.text_extents(char)[0:4]
+					char_padding_left, char_padding_top, char_width, char_height = \
+					cache.setdefault(char, c.text_extents(char)[0:4])
 					x = self.fontsize * col + float(self.fontsize - char_width - char_padding_left)/2
 					c.move_to(x, y)
 					c.show_text(char)
 				else:
-					c.set_source_rgba(r,g,b,0.5)
 					c.rectangle(self.fontsize * col, self.fontsize * row, self.fontsize, self.fontsize)
 					c.fill()
 		return self
