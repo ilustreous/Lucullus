@@ -52,7 +52,7 @@ class Pool(object):
 
     def cleanup(self, timeout=60*60):
         ''' Purge resources than timeout in seconds '''
-        for x in self.db.keys():
+        for x in list(self.db.keys()):
             try:
                 if isinstance(self.db[x], BaseResource) and self.db[x].atime < time.time() - timeout:
                     self.purge(x)
