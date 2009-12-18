@@ -6,6 +6,7 @@
 	<script src="./jquery/jquery-1.3.2.min.js" type="text/javascript"></script>
 	<script src="./jquery/jquery-ui-1.7.2.custom.min.js" type="text/javascript"></script>
 	<script src="./jquery/jquery.query.js" type="text/javascript"></script>
+	<script src="./js/jquery.selector.js" type="text/javascript"></script>
 	<script src="./js/lucullus.js"	 type="text/javascript"></script>
 	<script src="./js/lucullus.seqgui.js"	type="text/javascript"></script>
 
