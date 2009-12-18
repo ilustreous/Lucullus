@@ -76,7 +76,7 @@ jQuery.selectArea = function(callback, options) {
           .css('top', obj.area[1]+'px')
           .css('width', Math.max(1, obj.area[2]-obj.area[0]-2)+'px')
           .css('height', Math.max(1, obj.area[3]-obj.area[1]-2)+'px')
-          obj.settings.onchange(obj, event)
+        obj.settings.onchange(obj, event)
     }
 
     this.on_end = function(event) {
@@ -100,5 +100,4 @@ jQuery.selectArea = function(callback, options) {
     }
 
     this.protect.bind('mousedown', this.on_start);
-    this.protect.bind('mousemove', this.on_move);
 }

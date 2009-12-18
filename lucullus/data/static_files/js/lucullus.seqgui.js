@@ -12,8 +12,6 @@ SeqGui
     SeqSlider
     SeqSearch
     SeqInfo[]
-
-
 */
 
 function SeqGui(api) {
@@ -23,8 +21,8 @@ function SeqGui(api) {
     this.api = api
 
     this.nDialog = $('<div></div>').dialog({
-        height:400, minHeight: 200,
-        width:700, minWidth: 400,
+        height: 400, minHeight: 200,
+        width: 700, minWidth: 400,
         title: "Lucullus Sequence Viewer",
         resizeStop: function(e, ui) { self.on_resize() },
         close: function() {self.on_close()}
@@ -67,7 +65,6 @@ function SeqGui(api) {
         self.upload(file, type, compression)
     })
     this.eSearch = new SeqSearchDialog(function(name, offset) {return self.eData.jump_to(name, offset)})
-
     this.eUpload.show()
 }
 

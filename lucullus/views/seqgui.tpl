@@ -17,16 +17,16 @@
 	<title>Lucullus</title>
 </head>
 <body>
+	<button id='new_seq_window'>New Window</button>
 	<script type="text/javascript">
 	  /*<![CDATA[*/
-	var server = document.location.protocol + '//' + document.location.host + document.location.pathname + 'api'
-	var api
-	var gui
+		var server = document.location.protocol + '//' + document.location.host + document.location.pathname + 'api'
+		var api = new Lucullus.api(server, "test")
+		var gui = []
 		/* api calls are blocking. Never call them in main thread */
-	$(window).load(function () {
-		api = new Lucullus.api(server, "test")
-		gui = new SeqGui(api)
-	})
+		$('#new_seq_window').bind('click', function () {
+			gui[gui.length] = new SeqGui(api)
+		})
 	/*]]>*/</script>
 </body>
 </html>
