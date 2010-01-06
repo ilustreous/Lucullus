@@ -9,7 +9,7 @@ import lucullus.render.geometry
 import lucullus.resource
 import lucullus.plugins.base
 import lucullus.plugins.seq
-
+import lucullus.plugins.newick
 
 log = logging.getLogger("lucullus")
 log.debug("Starting server")
@@ -24,6 +24,7 @@ rdb = lucullus.resource.Pool(resource_path)
 rdb.install('Sequence', lucullus.plugins.seq.SequenceResource)
 rdb.install('Index', lucullus.plugins.base.IndexView)
 rdb.install('Ruler', lucullus.plugins.base.RulerView)
+rdb.install('Newick', lucullus.plugins.newick.NewickResource)
 
 
 
