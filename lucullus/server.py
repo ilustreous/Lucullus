@@ -2,7 +2,7 @@ import os, os.path
 import time
 import rfc822
 import bottle
-from bottle import route, HTTPError
+from bottle import route, HTTPResponse
 import logging
 import lucullus.render
 import lucullus.render.geometry
@@ -27,77 +27,111 @@ rdb.install('Ruler', lucullus.plugins.base.RulerView)
 rdb.install('Newick', lucullus.plugins.newick.NewickResource)
 
 
+err = dict()
+err['no key'] = 'You have to provide a valid api key'
+err['unknown type'] = 'The requestet resource type is not available.'
+err['no resource'] = 'The requested resource could not been found.'
+err['setup error'] = 'Resource setup failed'
+err['query error'] = 'Resource query failed'
+
+
+def apierr(code, **args):
+    args['error'] = code
+    if 'detail' not in args:
+        args['detail'] = err.get(code, 'Undocmented error')
+    log.warning("API error: %s" % repr(args))
+    raise bottle.HTTPResponse(args)
+
+
+def needs_apikey(func):
+    def wrapper(*a, **ka):
+        key = bottle.request.POST.get('apikey', None)
+        if key not in apikeys:
+            apierr('no key')
+        del bottle.request.POST['apikey']
+        return func(*a, **ka)
+    return wrapper
+
+
+def needs_ressource(func):
+    def wrapper(*a, **ka):
+        r = rdb.fetch(int(ka['rid']), None)
+        if not r:
+            return apierr('no resource', id=rid)
+        del ka['rid']
+        ka['ressource'] = r
+        return func(*a, **ka)
+    return wrapper
+
 
 @route('/api/create', method="POST")
+@needs_apikey
 def create():
     rdb.cleanup(60*60)
-    apikey = bottle.request.POST.get('apikey','')
-    r_type = bottle.request.POST.get('type','txt')
     options = dict(bottle.request.POST)
-    del options['apikey']
-    del options['type']
-    if apikey not in apikeys:
-        return HTTPError(401, 'You have to provide a valid api key')
+    r_type = options.get('type', 'txt')
+    if 'type' in options:
+        del options['type']
+
     try:
-        r = rdb.create(r_type, **options)
+        r = rdb.create(r_type)
+        if options:
+	        r.configure(**options)
     except lucullus.resource.ResourceTypeNotFound:
-        return HTTPError(403, 'The requestet resource type is not available. Please coose from ths list: '+', '.join(rdb.plugins.keys()))
-    return {"id": r.id, "state": r.state(), "methods": r.api}
+        apierr('unknown type', types=rdb.plugins.keys())
+    except lucullus.resource.ResourceSetupError, e:
+        apierr('setup error', id=rid, detail=e.args[0])
+    return {"id": r.id, "state": r.getstate(), "methods": r.getapi()}
 
 
 @route('/api/r:rid#[0-9]+#/setup', method='POST')
-def configure(rid):
+@needs_apikey
+@needs_ressource
+def setup(ressource):
     """ Accesses the resource configuration and functions """
-    if bottle.request.POST.get('apikey','') not in apikeys:
-        return HTTPError(401, 'You have to provide a valid api key')
-    r = rdb.fetch(int(rid),None)
-    if not r:
-        return HTTPError(404, 'Resource not found')
     options = dict(bottle.request.POST)
-    del options['apikey']
     try:
-        r.configure(**options)
-        return {"id": r.id, "state": r.state()}
-    except lucullus.resource.ResourceError, e:
-        return {'id': r.id, 'error': repr(e)}
+        ressource.setup(**options)
+        return {"id": ressource.id, "state": ressource.getstate()}
+    except lucullus.resource.ResourceSetupError, e:
+        return apierr('setup error', id=ressource.id, detail=e.args[0])
 
 
 @route('/api/r:rid#[0-9]+#/:query#[a-z_]+#', method='POST')
-def query(rid, query):
+@needs_apikey
+@needs_ressource
+def query(ressource, query):
     """ Accesses the resource configuration and functions """
-    if bottle.request.POST.get('apikey','') not in apikeys:
-        return HTTPError(401, 'You have to provide a valid api key')
-
-    r = rdb.fetch(int(rid),None)
-    if not r:
-        return HTTPError(404, 'Resource not found')
-
     options = dict(bottle.request.POST)
-    del options['apikey']
-
-    if not r:
-        return HTTPError(404, 'Resource not found')
+    response = dict(id=ressource.id)
+    response['request'] = query
+    response['options'] = options
     try:
-        answer = r.query(query, **options)
-        answer['id'] = r.id
-        answer['state'] = r.state()
-        return answer
-    except lucullus.resource.ResourceError, e:
-        return {'id': rid, 'error': repr(e)}
+        response['result'] = ressource.query(query, **options)
+        response['state'] = ressource.getstate()
+        return response
+    except lucullus.resource.ResourceQueryError, e:
+        response['detail'] = e.args[0]
+        return apierr('query error', **response)
 
 
 @route('/api/r:rid#[0-9]+#/help', method='GET')
 @route('/api/r:rid#[0-9]+#/help/:query#[a-z_]+#', method='GET')
-def help(rid, query=None):
-    r = rdb.fetch(int(rid),None)
+@needs_apikey
+@needs_ressource
+def help(ressource, query=None):
+    api = ressource.getapi()
     if query:
-        api = [(c, getattr(r, "api_"+c).__doc__) for c in [query] if c in r.api]
-    else:
-        api = [(c, getattr(r, "api_"+c).__doc__) for c in r.api]
-    return {'api':api}
+        if query in api:
+            doc = getattr(ressource, "api_%s"%s).__doc__ or 'Undocumented'
+            return dict(id=ressource.id, query=query, help=doc)
+        else:
+            return apierr('query error', id=ressource.id, detail='Undefined')
+    return {'id': ressource.id, 'api':api.keys}
 
 
 @route('/api/r:rid#[0-9]+#')
+@needs_ressource
 def info(rid):
     r = rdb.fetch(int(rid),None)
     if not r:

@@ -4,55 +4,20 @@
 
 var Lucullus = new Object();
 
-Lucullus.util = new Object();
 
 
-/**
- * Starts an ajax post request and returns a trigger object
- * @param {string} url URL to call
- * @param {object} parameter Dict of POST parameters
- * @param {function} callback Function to call when finished (optional)
- * @return Trigger object with .call_data and .call_url attached
- */
-
-Lucullus.util.post = function(url, data) {
-    var t = new Lucullus.util.Trigger()
-    t.call_data = data
-    t.call_url = url
-
-    jQuery.ajax({
-        url: url,
-        data: data,
-        dataType: "json",
-        type: 'post',
-        success: function(d){
-            if(d && typeof d === 'object' && !d.error) {
-                t.finish(d)
-            } else {
-                error = d
-                if(!error) error = {'error':'No answer'}
-                if(typeof error !== 'object') error = {'error':'Invalid answer', 'answer':error}
-                t.abort(error)
-            }
-        },
-        error: function(XMLHttpRequest, textStatus, errorThrown) {
-            t.abort({'error':'HTTP Error: '+textStatus})
-        }
-    });
-
-    return t
-}
 
 
 
 /**
- * Trigger class
- * Used for delayed execution of callback functions on certain events. 
- * @class Trigger
+ * Request class
+ * Used for delayed execution of callback functions on ajax requests.
+ * Understands Lucullus API 1.0 error responses
+ * @class Request
  * @constructor
  */
 
-Lucullus.util.Trigger = function() {
+Lucullus.Trigger = function() {
     /** List of bound callbacks 
      * @type Array */
     this.callbacks = Array()
@@ -60,9 +25,7 @@ Lucullus.util.Trigger = function() {
     this.result = null
     /** Error object after calling self.abort(error) */
     this.error = null
-    /** Status if this trigger.
-    * @type Bool */
-    this.done = false // True after .finish() or .abort()
+    this.aborted = false
 }
 
 /** Bind new callbacks.
@@ -70,15 +33,15 @@ Lucullus.util.Trigger = function() {
  * You can recover from errors with t.finish(). All remaining callbacks will see a finished trigger 
  */
 
-Lucullus.util.Trigger.prototype.wait = function() {
+Lucullus.Trigger.prototype.wait = function() {
     var self = this
     jQuery.each(arguments, function(i, f) {
         if(jQuery.isFunction(f)) {
             self.callbacks.push(f)
         }
     })
-    if(this.done) {
-        while(this.callbacks.length) {
+    if(this.result) {
+        while(this.callbacks.length && !this.aborted) {
             var c = this.callbacks.shift()
             c(this)
         }
@@ -86,41 +49,38 @@ Lucullus.util.Trigger.prototype.wait = function() {
     return this
 }
 
-/** Inherit the state of another trigger
- *
- */
-
-Lucullus.util.Trigger.prototype.see = function(trigger) {
-    this.done = trigger.done
-    this.result = trigger.result
-    this.error = trigger.error
-    this.wait()
-    return this
-}
-
-
-/** Sets this.result and runs all the callbacks.
- *
- */
-
-Lucullus.util.Trigger.prototype.finish = function(result) {
-    this.done = true
+/** Recover from an error
+ * @param newdata overwrite result object from error response **/
+Lucullus.Trigger.prototype.success = function(result) {
     this.result = result
     this.error = null
     this.wait()
     return this
 }
 
-/** Sets this.error and runs all the callbacks.
- *
- */
-
-Lucullus.util.Trigger.prototype.abort = function(error) {
-    this.done = true
-    this.error = error
-    this.result = null
+/** Recover from an error
+ * @param newdata overwrite result object from error response **/
+Lucullus.Trigger.prototype.fail = function(error, result) {
+    this.result = result ? result : null
+    this.error = error ? error : true
     this.wait()
     return this
+}
+
+
+/** Abort execution of other callbacks **/
+Lucullus.Trigger.prototype.abort = function() {
+    this.aborted = true
+    return this
+}
+
+/** Recover from an error
+ * @param newdata overwrite result object from error response **/
+Lucullus.Trigger.prototype.recover = function(newdata) {
+    if(!newdata)
+        newdata = this.result
+    this.aborted = false
+    return this.success(newdata)
 }
 
 
@@ -130,11 +90,58 @@ Lucullus.util.Trigger.prototype.abort = function(error) {
 
 
 
+/**
+ * Request class
+ * Used for delayed execution of callback functions on ajax requests.
+ * Understands Lucullus API 1.0 error responses
+ * @class Request
+ * @constructor
+ */
 
+Lucullus.Request = function(url, data, delayed) {
+    this.constructor()
+    /** URL for the request **/
+    this.url = url
+    /** Request Data (if any) **/
+    this.data = (typeof data == 'object') ? data : null
+    this.started = false
+    if(!delayed) this.start()
+}
 
+Lucullus.Request.prototype = new Lucullus.Trigger()
 
+Lucullus.Request.prototype.start = function() {
+    if(this.started) return
+    this.started = true
+    var self = this
+    jQuery.ajax({
+        url: this.url,
+        data: this.data,
+        dataType: "json",
+        type: "POST",
+        success: function(d){
+            if(typeof d !== 'object')
+                d = {'error': 'no data', 'detail': 'Response did not contain any data'}
+            if(d.error)
+                self.fail(d.error, d)
+            else
+                self.success(d)
+        },
+        error: function(XMLHttpRequest, textStatus, errorThrown) {
+            self.fail('http error', {'message':'HTTP Error: '+textStatus, 'HTTPStatus':textStatus})
+        }
+    });
+}
 
+/** Repeat the request with new data (to recover from errors)
+ * @param newdata overwrite original data object **/
 
+Lucullus.Request.prototype.restart = function(newdata) {
+    this.data = (typeof newdata == 'object') ? newdata : null
+    this.started = false
+    this.start()
+    return this
+}
 
 
 
@@ -154,20 +161,29 @@ Lucullus.api = function (server, key) {
     /** API key 
      * @type string */
     this.key        = key
-    /** List of supported plugins 
-     * @type List */
-    this.plugins  = []
-    /** Log for errors and debug messages 
-     * @type Array */
-    this.log        = []
-    /** Debug mode
-     * @type bool */
-    this.debug      = false
     /** List of known resources 
      * @type Dict */
     this.resources  = {}
+    this.debug = function(msg){alert(msg)}
 }
 
+
+/**
+ * Calls an API method of a Lucullus Server
+ * @param {string} Name of the API method
+ * @param {string} Data to provide
+ * @param {function} Callback
+ * @return Lucutus.call object with $this attached to $call.api
+ */
+
+Lucullus.api.prototype.query = function(action, options, delayed) {
+    var url = this.server + '/' + action
+    if(options)
+        options['apikey'] = this.key
+    var request = new Lucullus.Request(url, options, delayed)
+    request.api = api
+    return request
+}
 
 /**
  * Creates a new Resource and returns a resource object equipped with
@@ -177,62 +193,18 @@ Lucullus.api = function (server, key) {
  * @return Lucullus.Resource object
  */
 Lucullus.api.prototype.create = function(type, options) {
-    return new Lucullus.Resource(this, type, options)
-}
-
-
-/**
- * Calls a API method of a Lucullus Server
- * @param {string} Name of the API method
- * @param {string} Data to provide
- * @param {function} Callback
- * @return Lucutus.call object with $this attached to $call.api
- */
-
-Lucullus.api.prototype.query = function(action, options) {
-    var url = this.server + '/' + action
-    var t = Lucullus.util.post(url, options)
-    t.api = api
-    return t
+    var resource = new Lucullus.Resource(this, type, options)
+    var self = this
+    resource.wait(function(response) {
+        self.resources[resource.id] = resource
+    })
+    return resource
 }
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-  new Resource() tries to create a new resource
-  r.query() returns call objects bount to that resource
-  
-*/
-
-/* There is only one query at a time. Resource.current holds a trigger for that query. Additional querys wait in Resource.queue
- * Each new query returns a user_trigger. This.wait() will add a callback to the most recently added user_trigger
- * If a query finishes, it will do the following
- *   Update the resources state
- *   Run the this.current.user_trigger
- *   Run this.dequeue()
- * this.dequeue() will start the next query, IF the current one is done AND is not an error.
- * On errors, the execution of new querys stops. Use recover() to restart it and recover(true) to restart after clearing the queue 
-*/
 
 
 /**
@@ -241,133 +213,128 @@ Lucullus.api.prototype.query = function(action, options) {
  * @param {string} type Name of the resource classto create
  * @param {string} name Optional identifying name of the to-be-creates resource (overwriting existing)
  */
-Lucullus.Resource = function(api, type, options) {
-    this.api = api
-    this.id = null
-    this.type = type
-    this.queue = new Array()
-    this.current = null
+Lucullus.Resource = function(api, type) {
+    this.api = api // API reference
+    this.id = null // Resource ID
+    this.type = type // Resource type
+    this.methods = Array() // API methods for this resource
+    this.state = Object() // Resource state
+    this.queue = new Array() // All querys (executed and waiting)
+    this.error_at = null // Index of Last error respose that stopped the queue
     var self = this
     
     // Request resource on server
-    if(!options) var options = {}
+    if(typeof options != 'object')
+        var options = {}
     options['type'] = type
-    options['apikey'] = self.api.key
-    this.current = this.api.query('create', options)
-    this.current.user_trigger = new Lucullus.util.Trigger()
-    this.current.user_trigger.resource = this
-    this.current.wait(function(c) {
-        if(c.result) {
-            if(typeof c.result.id === 'string' || typeof c.result.id === 'number') {
-                self.id = c.result.id
-                if(typeof c.result.state === 'object')
-                    self.update(c.result.state)
-                if(typeof c.result.methods === 'object') {
-                    jQuery.each(c.result.methods, function(i, name) {
-                        if(typeof self[name] === 'undefined') {
-                            self[name] = function(opt) {
-                                return self.query(name, opt)
-                            }
+    var request = this.api.query('create', options)
+    request.wait(function(response) {
+        if(response.result && !response.error) {
+            rid = response.result.id
+            state = response.result.state
+            methods = response.result.methods
+            if(typeof rid !== 'string' || typeof rid !== 'number')
+                self.id = rid
+            if(typeof state === 'object') 
+                self.self_update(state)
+            if(jQuery.isArray(methods)) {
+                this.methods = methods
+                jQuery.each(methods, function(i, name) {
+                    if(typeof self[name] === 'undefined') {
+                        self[name] = function(opt) {
+                            return self.query(name, opt)
                         }
-                    });
-                }
-            } else {
-                c.result['error'] = "No resource ID! Initialisation failed?"
-                c.abort(c.result)
+                    }
+                });
             }
         } else {
-            c.resource.error = c.error
+            self.api.debug("Could not create resource type" + self.type)
+            self.error_at = 0
+            response.abort()
         }
     })
-    this.current.wait(function(c) {
-        if(c.result)
-            c.user_trigger.finish(c.result)
-        else
-            c.user_trigger.abort(c.error)
-    })
-    this.current.wait(function(c) {
-        self.dequeue()
-    })
+    this.queue.push(request)
 }
 
-/** Will wait for the LAST queue to finish. */
+
+Lucullus.Resource.prototype.setup = function(opt) {
+    return this.query('setup', opt)
+}
+
+/** Returns the last entry in the query queue */
+Lucullus.Resource.prototype.lastquery = function() {
+    return this.queue.slice(-1)[0]
+}
+
+
+/** Same as Request.lastquery().wait() */
 Lucullus.Resource.prototype.wait = function() {
-    var t = this.queue.slice(-1)[0]
-    if(!t) t = this.current
+    var request = this.lastquery()
     jQuery.each(arguments, function(i, f) {
         if(jQuery.isFunction(f)) {
-            t.user_trigger.wait(f)
+            request.wait(f)
         }
     })
     return this
 }
 
 
+
 /**
  * Runs a server resource api call and updates local attributes.
- * Does nothing if this.error is true. Delete this.error to recover from errors.
+ * Does nothing if this.error() is true. Use this.recover() to continue.
+ * Callbacks bound to the returned Trigger are executed before callbacks bound with Resource.wait()
  * @param {string} action Action to call
  * @param {object} parameter Dict of call parameters
  * @param {function} Callback
- * @return Call object with $this attached to $call.resource ad $this.api attached to $call.api
+ * @return Trigger object with .resource, .request and .api attributes
  */
 Lucullus.Resource.prototype.query = function(action, options) {
     var self = this
-    var rt = new Lucullus.util.Trigger() // Trigger to return
-    rt.resource = self
-    this.queue.push({action:action, options:options, user_trigger: rt})
-    this.dequeue()
-    return rt
-}
-
-
-
-Lucullus.Resource.prototype.dequeue = function() {
-    if(!this.current.done) return // this.currend will run dequeue() again later
-    if(this.current.error) return // The sceduler is stopped
-    var self = this
-    var q = this.queue.shift()
-    if(q) {
-        var action = q.action
-        var options = q.options
-        var rt = q.user_trigger
-        var url = this.api.server + '/r' + this.id + '/' + action
-        if(!options) var options = {}
-        options['apikey'] = self.api.key
-        this.current = Lucullus.util.post(url, options)
-        this.current.user_trigger = rt
-        // First: Update the resources state
-        this.current.wait(function(c) {
-            if(c.result) {
-                if(typeof c.result.id !== 'undefined' && c.result.id == self.id) {
-                    if(typeof c.result.state === 'object')
-                        self.update(c.result.state)
-                } else {
-                    c.result['error'] = "Resource ID mismatch!"
-                    c.abort(c.result)
-                }
-            }
-        })
-        // Then: Fire the trigger once returned by Resource.query (run user callbacks bound to exactly this queue)
-        this.current.wait(function(c) {
-            if(c.result)
-                c.user_trigger.finish(c.result)
-            else
-                c.user_trigger.abort(c.error)
-        })
-        // Then: Run dequeue (to start next query)
-        this.current.wait(function(c) {
-            self.dequeue()
-        })
-    }
+    if(!options) var options = {}
+    var request = this.api.query('r' + this.id + '/' + action, options, true)
+    var trigger = new Lucullus.Trigger()
+    trigger.resource = this
+    trigger.api = this.api
+    trigger.request = request
+    /* This is the first callback for this response.
+       The start calls for future requests are bound later.
+       An abort() will prevent these from being started */
+    request.wait(function(response){
+        if(response.error) {
+            self.error_at = jQuery.inArray(response, self.queue)
+            response.abort()
+            trigger.fail(response.error, response.result)
+            return
+        }
+        if(typeof response.result.state === 'object') {
+            self.self_update(response.result.state)
+        }
+        if(response.result.result)
+            trigger.success(response.result.result)
+        else
+            trigger.success({})
+    })
+    // Add to queue. Now it is accessable via Request.wait()
+    var index = this.queue.push(trigger.request)
+    // Make sure that this requests starts as soon as the previous one ends
+    this.queue[index-2].wait(function(){
+        if(self.error_at === null)
+            request.start()
+    })
+    return trigger
 }
 
 Lucullus.Resource.prototype.close = function() {
-    var t =  this.query('close')
-    t.wait(function(c) {
-        c.result['error'] = "resource closed"
-        c.abort(c.result)
-    })
+    return this.query('close')
+}
+
+Lucullus.Resource.prototype.recover = function() {
+    var e = this.error()
+    if(e) {
+        this.error_at = null
+        e.recover({id:this.id})
+    }
 }
 
 /**
@@ -375,7 +342,7 @@ Lucullus.Resource.prototype.close = function() {
  * @param {object} dict Dictionary of new (or changed) attributes
  * @return Resource object (self)
  */
-Lucullus.Resource.prototype.update = function(dict) {
+Lucullus.Resource.prototype.self_update = function(dict) {
     var self = this
     jQuery.each(dict, function(key, val) {
         // Protect important attributes
@@ -390,13 +357,56 @@ Lucullus.Resource.prototype.update = function(dict) {
     return self
 }
 
-Lucullus.Resource.prototype.recover = function(clear) {
-    while(clear && this.queue.length) {
-        this.queue.shift()
-    }
-    this.current.error = null
-    this.dequeue()
+/**
+ * Returns the request that caused an error, if any
+ * @return Request object
+ */
+Lucullus.Resource.prototype.error = function() {
+    if(this.error_at === null)
+        return null
+    else
+        return this.queue[this.error_at]
 }
+
+
+Lucullus.Resource.prototype.imgurl = function(channel, x, y, width, height, format) {
+    return this.api.server + '/r' + this.id + '/default-'+x+'-'+y+'-'+width+'-'+height+'.'+format+'?mtime=' + self.mtime
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -476,12 +486,17 @@ Lucullus.ViewMap.prototype._refresh = function() {
     return
 }
 
+Lucullus.ViewMap.prototype.imgurl = function(numberx, numbery, sizex, sizey) {
+    return this.view.imgurl('default', (numberx*sizex), (numbery*sizey), sizex, sizey, 'png')
+}
+
+
 Lucullus.ViewMap.prototype.refresh = function () {
     var self = this
     // If the map is not visible, we don't have to do anything
     if(this.mapsize[0] == 0 || this.mapsize[1] == 0) return
     // React on changed view parameter
-    if(this.view && !this.view.error && this.view.width && this.view.height && this.view.offset) {
+    if(this.view && !this.view.error() && this.view.width && this.view.height && this.view.offset) {
         var width = this.view.width
         var height = this.view.height
         var ox = this.view.offset[0]
@@ -490,9 +505,6 @@ Lucullus.ViewMap.prototype.refresh = function () {
         this.clipping[1] = Math.max(oy, this.manclipp[1])
         this.clipping[2] = Math.min(width+ox, this.manclipp[2])
         this.clipping[3] = Math.min(height+oy, this.manclipp[3])
-        this.imgurl = function(numberx, numbery, sizex, sizey) {
-            return self.view.api.server + '/r' + self.view.id + '/default-'+(numberx*sizex)+'-'+(numbery*sizey)+'-'+sizex+'-'+sizey+'.png?mtime=' + self.view.mtime
-        }
     } else {
         this.node.empty()
         return
@@ -545,6 +557,8 @@ Lucullus.ViewMap.prototype.imagetiles = function(nx, ny) {
             
             if(tox < this.clipping[2] && toy < this.clipping[3] && (tox + tx) > this.clipping[0] && (toy + ty) > this.clipping[1]) {
                 images.push('<img src="'+url+'" style="position:absolute; width:'+tx+'px; height:'+ty+'px; left:'+ox+'px; top:'+oy+'px;" />')
+            } else {
+                images.push('<div style="position:absolute; width:'+tx+'px; height:'+ty+'px; left:'+ox+'px; top:'+oy+'px;">No Image</div>')
             }
         }
     }

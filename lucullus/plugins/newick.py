@@ -286,11 +286,11 @@ class NewickResource(BaseView):
 		self.vlines = []
 		self.size = (0.0, 0.0)
 
-	def configure(self, **options):
+	def setup(self, **options):
 		self.fontsize = int(options.get('fontsize', self.fontsize))
 		self.source = options.get('source', self.source)
 		self.format = options.get('format', self.format)
-		self.scale = float(self.options.get('scale', self.scale))
+		self.scale = float(options.get('scale', self.scale))
 		if 'source' in options:
 			self.api_load(source=self.source, format=self.format)
 		self.touch()
@@ -350,8 +350,8 @@ class NewickResource(BaseView):
 		return self.vsize
 
 	
-	def state(self):
-		s = super(NewickResource, self).state()
+	def getstate(self):
+		s = super(NewickResource, self).getstate()
 		s['nodes'] = self.nodes
 		return s
 

@@ -13,12 +13,12 @@ class IndexView(BaseView):
         h = len(self.index) * self.fontsize
         return (w,h)
 
-    def state(self):
-        s = super(IndexView, self).state()
+    def getstate(self):
+        s = super(IndexView, self).getstate()
         s['rows'] = len(self.index)
         return s
 
-    def configure(self, **options):
+    def setup(self, **options):
         self.fontsize = int(options.get('fontsize', self.fontsize))
         if 'keys' in options and isinstance(options['keys'], list):
             self.index = map(str, options['keys'])
@@ -64,7 +64,7 @@ class RulerView(BaseView):
         self.fontsize   = 12
         self.fontcolor = 'black'
 
-    def configure(self, **options):
+    def setup(self, **options):
         self.marks      = int(options.get('marks', self.marks))
         self.digits     = int(options.get('digits', self.digits))
         self.fontsize   = int(options.get('fontsize', self.fontsize))

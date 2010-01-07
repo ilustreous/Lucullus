@@ -16,7 +16,7 @@ import urllib2
 from StringIO import StringIO
 import fnmatch
 
-from lucullus.resource import BaseView
+from lucullus.resource import BaseView, ResourceQueryError
 from Bio import SeqIO, Seq, SeqRecord
 
 
@@ -33,7 +33,7 @@ class SequenceResource(BaseView):
 		self.len = 0
 
 	
-	def configure(self, **options):
+	def setup(self, **options):
 		self.fontsize = int(options.get('fontsize', self.fontsize))
 		self.source = options.get('source', self.source)
 		self.format = options.get('format', self.format)
@@ -46,8 +46,8 @@ class SequenceResource(BaseView):
 		return (self.cols*self.fontsize, self.rows*self.fontsize)
 
 	
-	def state(self):
-		s = super(SequenceResource, self).state()
+	def getstate(self):
+		s = super(SequenceResource, self).getstate()
 		s['len'] = self.len
 		s['fontsize'] = self.fontsize
 		s['rows'] = self.rows
@@ -62,18 +62,18 @@ class SequenceResource(BaseView):
 			try:
 				data = urllib2.urlopen(source, None).read()
 			except (urllib2.URLError, urllib2.HTTPError), e:
-				raise base.ResourceQueryError('Faild do open URI: %s' % source)
+				raise ResourceQueryError('Faild do open URI: %s' % source)
 			self.source = source
 			self.format = format
 		else:
-			raise base.ResourceQueryError('Unsupported protocol or uri syntax: %s' % source)
+			raise ResourceQueryError('Unsupported protocol or uri syntax: %s' % source)
 		
 		try:
 			seq = SeqIO.parse(StringIO(data), self.format)
 		except Exception, e:
-			raise base.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
+			raise ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
 		if not seq:
-			raise base.ResourceQueryError('No sequences found.')
+			raise ResourceQueryError('No sequences found.')
 		for s in seq:
 			self.sequences.append(str(s.seq))
 			self.keys.append(s.id)

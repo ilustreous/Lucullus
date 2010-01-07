@@ -6,10 +6,11 @@ import os.path
 class ResourceError(Exception): pass
 class ResourceNotFound(ResourceError): pass
 class ResourceTypeNotFound(ResourceError): pass
-class ResourceUploadError(ResourceError): pass
+
+class ResourceSetupError(ResourceError): pass
+#class ResourceUploadError(ResourceError): pass
+
 class ResourceQueryError(ResourceError): pass
-class ResourceQueryNoApiError(ResourceQueryError): pass
-class ResourceQueryOptionsError(ResourceQueryError): pass
 
 class Pool(object):
     """docstring for ResourceManager"""
@@ -36,12 +37,11 @@ class Pool(object):
             if isinstance(cls, BaseResource):
                 self.install(name, cls)
 
-    def create(self, plugin, **options):
+    def create(self, plugin):
         ''' Create a new resource '''
         if plugin not in self.plugins:
             raise ResourceTypeNotFound('Plugin %s not available' % plugin)
         r = self.plugins[plugin](pool=self)
-        r.configure(**options)
         rid = id(r)
         while rid in self.db or os.path.exists(os.path.join(self.savepath, "%d.res" % rid)): 
             rid += 1
@@ -97,12 +97,15 @@ class BaseResource(object):
         self.atime = time.time()
         self.resource_pool = pool
         self.prepare()
-        self.api = [c[4:] for c in dir(self) if c.startswith('api_') and callable(getattr(self, c))]
         self.id = -1
 
-    def state(self):
+    def getapi(self):
+        return [c[4:] for c in dir(self) if c.startswith('api_') and callable(getattr(self, c))]
+        #TODO use inspect
+
+    def getstate(self):
         """ Should return a dict with some infos about this resource """
-        return {'mtime':self.mtime, 'atime':self.atime, 'api':self.api, 'id':self.id}
+        return {'mtime':self.mtime, 'atime':self.atime, 'methods':self.getapi(), 'id':self.id}
 
     def prepare(self):
         """ Called on resource creation """
@@ -114,7 +117,7 @@ class BaseResource(object):
             self.mtime = time.time()
         self.atime = time.time()
 
-    def configure(self, **options):
+    def setup(self, **options):
         ''' May change the resources state but does not return anything '''
         pass
 
@@ -123,7 +126,7 @@ class BaseResource(object):
         try:
             c = getattr(self, "api_" + name)
         except (AttributeError), e:
-            raise ResourceQueryNoApiError("Resource %s does not implement %s()" % (self.__class__.__name__, name))
+            raise ResourceQueryError("Resource %s does not implement %s()" % (self.__class__.__name__, name))
         # Parameter testing
         provided = set(options.keys())
         available, onestar, twostar, defaults = inspect.getargspec(c)
@@ -135,10 +138,10 @@ class BaseResource(object):
         available = set(available)
         missing = requied - provided
         if missing:
-            raise ResourceQueryOptionsError('Missing arguments: %s' % ','.join(missing))
+            raise ResourceQueryError('Missing arguments: %s' % ','.join(missing))
         unknown = provided - available
         if unknown and not twostar:
-            raise ResourceQueryOptionsError('Unknown arguments: %s' % ','.join(unknown))
+            raise ResourceQueryError('Unknown arguments: %s' % ','.join(unknown))
         self.touch(False)
         return c(**options)
 
@@ -156,8 +159,8 @@ class BaseView(BaseResource):
         """ Should return the (x,y) offset of the drawable area in pixel. """
         return (0,0)
 
-    def state(self):
-        state = super(BaseView, self).state()
+    def getstate(self):
+        state = super(BaseView, self).getstate()
         w, h = self.size()
         ox, oy = self.offset()
         state.update({'width':w, 'height':h, 'offset':[ox, oy], 'size':[w, h]})

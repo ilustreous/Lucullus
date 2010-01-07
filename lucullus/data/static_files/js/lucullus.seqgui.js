@@ -62,7 +62,7 @@ function SeqGui(api) {
     this.eHelp = new SeqHelpDialog()
     this.eSettings = new SeqSettingsDialog(this.eData)
     this.eUpload = new SeqUploadDialog(function(file, type, compression) {
-        self.upload(file, type, compression)
+        return self.upload(file, type, compression)
     })
     this.eSearch = new SeqSearchDialog(function(name, offset) {return self.eData.jump_to(name, offset)})
     this.eUpload.show()
@@ -223,9 +223,17 @@ function SeqUploadDialog(on_upload) {
         var url = self.nForm.find('input[name="upUrl"]').val()
         var format = self.nForm.find('select[name="format"]').val()
         var packed = self.nForm.find('select[name="packed"]').val()
-        self.do_upload(url, format, packed)
+        var trigger = self.do_upload(url, format, packed)
         self.nRoot.find('.status').text('Uploading '+url+' ('+format+'). This may take a while...')
         self.nForm.hide('slow')
+        trigger.wait(function(){
+            if(trigger.error) {
+                self.nRoot.find('.status').text('Uploading failed: ('+trigger.error+') '+trigger.result.detail)
+                self.nForm.show('slow')
+            } else {
+                $(self).dialog('close');
+            }
+        })
         return false
     })
 
@@ -554,36 +562,34 @@ SeqDataTable.prototype.resize = function(sw, sh) {
 
 SeqDataTable.prototype.upload = function(file, format, compression){
     this.status('Starting Upload. File: '+file+' Format: '+format)
-    var trigger = new Lucullus.util.Trigger() 
+    var trigger = new Lucullus.Trigger() 
     var self = this
     self.nTable.hide()
     // Request resources
-    self.eSeqMap.view.wait(function(){
-        self.eSeqMap.view.query('setup', {'source':file, 'format':format})
-        self.eSeqMap.view.wait( function(c) {
-            trigger.finish(c) // Do this before recover()ing from errors, so the callbacks can display the error message.
-            if(c.error) {
-                self.status('Upload failed: '+c.error.error)
-                c.finish(c.error)
+    self.eSeqMap.view.load({'source':file, 'format':format}).wait(function(response) {
+        if(response.error) {
+            trigger.fail(response.error, response.result)
+            self.status('Upload failed: ' + response.error)
+            self.eSeqMap.view.recover()
+            return
+        }
+        self.nTable.show()
+        self.eSeqMap.refresh()
+        self.nHSlider.slider('option', 'max', self.eSeqMap.view.columns)
+        self.nVSlider.slider('option', 'max', self.eSeqMap.view.rows)
+        self.update_slider()
+        self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_datasize()[0], self.lRulerHeight)
+        self.status('Parsing complete. Number of sequences: '+self.eSeqMap.view.len)
+        self.eSeqMap.view.keys().wait(function(response2){
+            if(response2.error) {
+                self.status('Failed to build an index: '+self.eSeqMap.view.error())
                 self.eSeqMap.view.recover()
                 return
             }
-            self.nTable.show()
-            self.eSeqMap.refresh()
-            self.nHSlider.slider('option', 'max', self.eSeqMap.view.columns)
-            self.nVSlider.slider('option', 'max', self.eSeqMap.view.rows)
-            self.update_slider()
-            self.eRulerMap.set_clipping(0,0,self.eSeqMap.get_datasize()[0], self.lRulerHeight)
-            self.status('Parsing complete. Number of sequences: '+self.eSeqMap.view.len)
-            self.eSeqMap.view.keys().wait(function(c){
-                if(c.error) {
-                    self.status('Failed to build an index: '+self.eSeqMap.view.error.message)
-                }
-                self.names = c.result.keys
-                self.eIndexMap.view.query('setup', {'keys':self.names})
-                self.eIndexMap.view.wait(function(){
-                    self.eIndexMap.refresh()
-                })
+            self.names = response2.result.keys
+            self.eIndexMap.view.setup({'keys':self.names}).wait(function(){
+                self.eIndexMap.refresh()
+                trigger.success(response)
             })
         })
     })
@@ -595,6 +601,11 @@ SeqDataTable.prototype.jump_to = function(name, offset) {
     var trigger = self.eSeqMap.view.search({'query':name, 'limit':100})
     var offset = parseInt(offset) || 0
     trigger.wait(function(c){
+        if(c.error){
+            self.status('Search failed: ' + c.error)
+            trigger.resource.recover()
+            return
+        }
         if(c.result && c.result.matches && c.result.matches.length > offset) {
             var index = c.result.matches[offset].index
             var height_per_index = self.eIndexMap.get_datasize()[1] / c.result.count
@@ -615,11 +626,12 @@ SeqDataTable.prototype.slide_to = function(x, y) {
 
 SeqDataTable.prototype.position_info = function(x,y) {
     var self = this
-    self.eSeqMap.view.posinfo({'x':x, 'y':y}).wait(function(c) {
-        if(c.result.key) {
-            self.status("Sequence: "+c.result.key+" (Position: "+c.result.seqpos+", Value: "+c.result.value+")")
+    self.eSeqMap.view.posinfo({'x':x, 'y':y}).wait(function(response) {
+        if(response.result && response.result.key) {
+            self.status("Sequence: "+response.result.key+" (Position: "+response.result.seqpos+", Value: "+response.result.value+")")
         } else {
             self.status("Sequence: None - Position: None")
+            response.resource.recover()
         }
     })
 }
