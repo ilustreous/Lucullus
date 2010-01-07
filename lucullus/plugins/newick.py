@@ -287,7 +287,7 @@ class NewickResource(BaseView):
 		self.scaley = None
 		self.vnodes = []
 		self.vlines = []
-		self.vsize = (0.0, 0.0)
+		self.vsize = (0, 0)
 
 	def setup(self, **options):
 		self.fontsize = int(options.get('fontsize', self.fontsize))
@@ -318,21 +318,22 @@ class NewickResource(BaseView):
 		if not self.tree.leafs():
 			raise ResourceQueryError('No data found.')
 		self.nodes = len(self.tree.leafs())
-		print 'loading'
 		self.api_layout('center')
-		print 'biglabel', self.biglabel
 		self.touch()
 		return {"nodes":self.nodes}
 
 	def api_layout(self, name='center'):
+		if not self.tree:
+			return
 		if name == 'center':
 			self.vnodes, self.vlines = tree_layout(self.tree)
 		else:
 			raise base.ResourceQueryError('Requested layout mode not implemented.')
+  
 		minstep = min([n[2] for n in self.vnodes if n[2] > 0]) # TODO excepton on empty tree
 		self.scalex = 1.0 / minstep * self.scale
 		self.scaley = self.fontsize * 1.25 # 1.25 = SPACING
-		self.vsize = (0.0, 0.0)
+		self.vsize = (0, 0)
 
 		# Calculate image size using font_extends() data in a test surface
 		test_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 16, 16) # 16 = small number
@@ -349,7 +350,7 @@ class NewickResource(BaseView):
 				biglabel = max(lw, biglabel)
 				width = max(width, self.scalex * (x + w) + 1.0 + lw)
 				height += self.scaley
-		self.vsize = (width, height)
+		self.vsize = (int(width), int(height))
 		self.biglabel = biglabel
 
 	def size(self):
@@ -371,6 +372,11 @@ class NewickResource(BaseView):
 		return context.font_extents()
 
 	def render(self, rc):
+		if not self.vnodes:
+			self.api_layout('center')
+		if not self.vnodes:
+			return
+	    
 		# Shortcuts
 		c = rc.context
 		area = rc.area

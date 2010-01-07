@@ -66,7 +66,11 @@ class Pool(object):
             fname = os.path.join(self.savepath, "%d.res" % rid)
             with open(fname, 'wb') as f:
                 r.touch()
-                pickle.dump(r, f, -1)
+                try:
+                    pickle.dump(r, f, -1)
+                    return True
+                except RuntimeError, e:
+                    return False
 
     def purge(self, rid):
         ''' Purge a resource '''

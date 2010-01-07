@@ -78,7 +78,7 @@ def create():
     try:
         r = rdb.create(r_type)
         if options:
-	        r.configure(**options)
+	        r.setup(**options)
     except lucullus.resource.ResourceTypeNotFound:
         apierr('unknown type', types=rdb.plugins.keys())
     except lucullus.resource.ResourceSetupError, e:

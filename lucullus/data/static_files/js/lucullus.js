@@ -213,7 +213,7 @@ Lucullus.api.prototype.create = function(type, options) {
  * @param {string} type Name of the resource classto create
  * @param {string} name Optional identifying name of the to-be-creates resource (overwriting existing)
  */
-Lucullus.Resource = function(api, type) {
+Lucullus.Resource = function(api, type, options) {
     this.api = api // API reference
     this.id = null // Resource ID
     this.type = type // Resource type
@@ -420,7 +420,6 @@ Lucullus.Resource.prototype.imgurl = function(channel, x, y, width, height, form
 
 Lucullus.ViewMap = function (root, view) {
     var self = this
-
     /* Shows a view in an element using a movable tile map */
     this.view = view
     this.root = $(root)
@@ -451,7 +450,6 @@ Lucullus.ViewMap = function (root, view) {
     this.resize(this.root.innerWidth(), this.root.innerHeight())
     this.root.empty()
     this.root.append(this.node)
-
     // Start refresh loop when ready.
     this.view.wait(function() {
         self.refresh()

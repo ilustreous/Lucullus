@@ -18,7 +18,8 @@
 	<title>Lucullus</title>
 </head>
 <body>
-	<button id='new_seq_window'>New Window</button>
+	<button id='new_seq_window'>New Sequence Window</button>
+	<button id='new_newick_window'>New Newick Window</button>
 	<script type="text/javascript">
 	  /*<![CDATA[*/
 		var server = document.location.protocol + '//' + document.location.host + document.location.pathname + 'api'
@@ -27,6 +28,9 @@
 		/* api calls are blocking. Never call them in main thread */
 		$('#new_seq_window').bind('click', function () {
 			gui[gui.length] = new SeqGui(api)
+		})
+		$('#new_newick_window').bind('click', function () {
+			gui[gui.length] = new Lucullus.ui.Newick(api)
 		})
 	/*]]>*/</script>
 </body>
