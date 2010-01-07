@@ -9,6 +9,7 @@
 	<script src="./js/jquery.selector.js" type="text/javascript"></script>
 	<script src="./js/lucullus.js"	 type="text/javascript"></script>
 	<script src="./js/lucullus.seqgui.js"	type="text/javascript"></script>
+	<script src="./js/lucullus.ui.js"	type="text/javascript"></script>
 
 	<!-- <link type="text/css" href="./jquery/smoothness/jquery-ui-1.7.2.custom.css" rel="stylesheet" /> -->
 	<link type="text/css" href="./jquery/lightness/jquery-ui-1.7.2.custom.css" rel="stylesheet" />

@@ -16,7 +16,7 @@ import urllib2
 from StringIO import StringIO
 import fnmatch
 
-from lucullus.resource import BaseView
+from lucullus.resource import BaseView, ResourceQueryError
 from Bio import SeqIO, Seq, SeqRecord
 
 def next(s, search):
@@ -140,7 +140,10 @@ class Tree(object):
 		for c in self.childs:
 			c.render(order+1)
 
-
+	def nodes(self):
+	    yield self
+	    for n in self.allchilds():
+	        yield n
 
 
 
@@ -284,7 +287,7 @@ class NewickResource(BaseView):
 		self.scaley = None
 		self.vnodes = []
 		self.vlines = []
-		self.size = (0.0, 0.0)
+		self.vsize = (0.0, 0.0)
 
 	def setup(self, **options):
 		self.fontsize = int(options.get('fontsize', self.fontsize))
@@ -293,6 +296,7 @@ class NewickResource(BaseView):
 		self.scale = float(options.get('scale', self.scale))
 		if 'source' in options:
 			self.api_load(source=self.source, format=self.format)
+		self.api_layout('center')
 		self.touch()
 
 	def api_load(self, source, format='newick'):
@@ -300,21 +304,23 @@ class NewickResource(BaseView):
 			try:
 				data = urllib2.urlopen(source, None)
 			except (urllib2.URLError, urllib2.HTTPError), e:
-				raise base.ResourceQueryError('Faild do open URI: %s' % source)
+				raise ResourceQueryError('Faild do open URI: %s' % source)
 			self.source = source
 			self.format = format
 		else:
-			raise base.ResourceQueryError('Unsupported protocol or uri syntax: %s' % source)
+			raise ResourceQueryError('Unsupported protocol or uri syntax: %s' % source)
 
 		self.tree = NewickTree(None)
 		try:
 			self.tree.parse(data)
 		except Exception, e:
-			raise base.ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
-		if not self.tree.nodes():
-			raise base.ResourceQueryError('No data found.')
-		self.nodes = len(self.tree.nodes())
+			raise ResourceQueryError('Parser error %s: %s' % (e.__class__.__name__, str(e.args)))
+		if not self.tree.leafs():
+			raise ResourceQueryError('No data found.')
+		self.nodes = len(self.tree.leafs())
+		print 'loading'
 		self.api_layout('center')
+		print 'biglabel', self.biglabel
 		self.touch()
 		return {"nodes":self.nodes}
 
@@ -326,7 +332,7 @@ class NewickResource(BaseView):
 		minstep = min([n[2] for n in self.vnodes if n[2] > 0]) # TODO excepton on empty tree
 		self.scalex = 1.0 / minstep * self.scale
 		self.scaley = self.fontsize * 1.25 # 1.25 = SPACING
-		self.size = (0.0, 0.0)
+		self.vsize = (0.0, 0.0)
 
 		# Calculate image size using font_extends() data in a test surface
 		test_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 16, 16) # 16 = small number
@@ -335,7 +341,7 @@ class NewickResource(BaseView):
 		height = 0.0
 		width = 0.0
 		biglabel = 0.0
-		for (x,y,w,label,isleaf) in self.nodes:
+		for (x,y,w,label,isleaf) in self.vnodes:
 			if isleaf:
 				lw = 0.0
 				if label:
@@ -349,7 +355,6 @@ class NewickResource(BaseView):
 	def size(self):
 		return self.vsize
 
-	
 	def getstate(self):
 		s = super(NewickResource, self).getstate()
 		s['nodes'] = self.nodes
@@ -365,14 +370,14 @@ class NewickResource(BaseView):
 		context.set_font_size(self.fontsize)
 		return context.font_extents()
 
-	def draw(self, rc):
+	def render(self, rc):
 		# Shortcuts
 		c = rc.context
 		area = rc.area
 		nodes = self.vnodes
 		lines = self.vlines
 
-		cminx, cminy, cmaxx, cmaxy = area.left, area.bottom, area.right, area.top
+		cminx, cminy, cmaxx, cmaxy = area.left, area.top, area.right, area.bottom
 		sx, sy = self.scalex, self.scaley
 		
 		# Make sure clipping is not hiding any text nodes or hlines
@@ -381,28 +386,27 @@ class NewickResource(BaseView):
 		cminx -= 1.0
 		cmaxx += 1.0
 				
-		self.setfontoptions(c)
 		rc.clear('white')
+		self.setfontoptions(c)
 		rc.set_color('black')
 		c.set_line_width(1.0)
 
-		for (x,y,w,text,isleaf) in vnodes:
+		for (x,y,w,text,isleaf) in self.vnodes:
 			# Nodes are sorted by y-position.
 			y *= sy
 			if y < cminy: continue
 			if y > cmaxy: break
 			x *= sx
 			x2 = x + w*sx
-
 			c.move_to(0.5 + round(x), 0.5 + round(y))
 			c.line_to(0.5 + round(x2), 0.5 + round(y))
 			c.stroke()
 			if isleaf:
-				context.set_font_size(self.fontsize)
+				c.set_font_size(self.fontsize)
 				c.move_to(x2 + 1.0, y + self.fontsize/3) #TODO: Ugly
 			else:
-				lw = context.text_extents(text.strip())[4]
-				context.set_font_size(self.fontsize * 0.85)
+				lw = c.text_extents(text.strip())[4]
+				c.set_font_size(self.fontsize * 0.85)
 				#c.move_to(x2 + 1.0, y + self.fontsize/3) #TODO: Ugly
 				c.move_to(x2 - lw, y - 1.0) #TODO: Ugly
 			if text:

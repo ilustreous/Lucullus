@@ -2,7 +2,7 @@ import os, os.path
 import time
 import rfc822
 import bottle
-from bottle import route, HTTPResponse
+from bottle import route, HTTPResponse, HTTPError
 import logging
 import lucullus.render
 import lucullus.render.geometry
@@ -10,6 +10,8 @@ import lucullus.resource
 import lucullus.plugins.base
 import lucullus.plugins.seq
 import lucullus.plugins.newick
+
+DEBUG = True
 
 log = logging.getLogger("lucullus")
 log.debug("Starting server")
@@ -159,7 +161,7 @@ def render(rid, channel, x, y, w, h, format):
     # Send cached file to client
     filename = '/tmp/lucullus/image_%s_%s_mtime%dx%dy%dw%dh%d.%s' % (rid,channel,int(r.mtime),x,y,w,h,format)
     ts2 = time.time()
-    if not os.path.exists(filename):
+    if not os.path.exists(filename) or DEBUG:
         area = lucullus.render.geometry.Area(left=x, top=y, width=w, height=h)
         rc = lucullus.render.Target(area=area, format=format)
         try:

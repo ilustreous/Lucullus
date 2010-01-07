@@ -48,6 +48,7 @@ class Pool(object):
         self.db[rid] = r
         r.id = rid
         r.touch()
+        self.save(rid)
         return r
 
     def cleanup(self, timeout=60*60):
@@ -59,15 +60,19 @@ class Pool(object):
             except KeyError:
                 pass
 
-    def purge(self, rid):
-        ''' Purge a resource '''
+    def save(self, rid):
         r = self.db.get(rid, None)
         if r and isinstance(r, BaseResource):
             fname = os.path.join(self.savepath, "%d.res" % rid)
             with open(fname, 'wb') as f:
                 r.touch()
                 pickle.dump(r, f, -1)
-            self.db[rid] = (r.__class__, r.atime, fname)
+
+    def purge(self, rid):
+        ''' Purge a resource '''
+        r = self.db.get(rid, None)
+        fname = self.save(rid)
+        self.db[rid] = (r.__class__, r.atime, fname)
 
     def fetch(self, rid, *a):
         ''' Load a resource '''
@@ -76,10 +81,11 @@ class Pool(object):
             return r
         path = os.path.join(self.savepath, "%d.res" % rid)
         if os.path.exists(path):
-            r = pickle.load(path)
-            self.db[rid] = r
-            r.id = rid
-            r.touch()
+            with open(path) as infile:
+                r = pickle.load(infile)
+                self.db[rid] = r
+                r.id = rid
+                r.touch()
             return r
         if a:
             return a[0]            
