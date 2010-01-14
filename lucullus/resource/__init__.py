@@ -2,6 +2,10 @@ import cPickle as pickle
 import inspect
 import time
 import os.path
+import sys
+import logging
+
+log = logging.getLogger("lucullus.db")
 
 class ResourceError(Exception): pass
 class ResourceNotFound(ResourceError): pass
@@ -26,15 +30,19 @@ class Pool(object):
         if not issubclass(cls, BaseResource):
             raise TypeError('Plugin must implement BaseResource.')
         if name in self.plugins:
-            raise TypeError('Plugin name no unique.')
+            if cls != self.plugins[name]:
+                raise TypeError('Plugin name no unique.')
+            return
+        log.info("Loaded plugin %s as '%s'", repr(cls), name)
         self.plugins[name] = cls
 
-    def install_all(self, module):
+    def install_module(self, module):
         ''' Install all plugins from a module '''
         if not inspect.ismodule(module):
-            module = __import__(module)
+            __import__(module)
+            module = sys.modules[module]
         for name, cls in inspect.getmembers(module, inspect.isclass):
-            if isinstance(cls, BaseResource):
+            if issubclass(cls, BaseResource):
                 self.install(name, cls)
 
     def create(self, plugin):

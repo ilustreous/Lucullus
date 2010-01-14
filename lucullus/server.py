@@ -2,32 +2,27 @@ import os, os.path
 import time
 import rfc822
 import bottle
-from bottle import route, HTTPResponse, HTTPError
+from bottle import HTTPResponse, HTTPError
 import logging
 import lucullus.render
 import lucullus.render.geometry
 import lucullus.resource
-import lucullus.plugins.base
-import lucullus.plugins.seq
-import lucullus.plugins.newick
-
-DEBUG = True
 
 log = logging.getLogger("lucullus")
-log.debug("Starting server")
-sessions = {}
-basepath = os.path.abspath(os.path.dirname(__file__))
-resource_path = os.path.join(basepath, 'data')
-bottle.TEMPLATE_PATH.insert(0,os.path.join(basepath, 'views/'))
-log.debug("Template Path: %s", bottle.TEMPLATE_PATH)
 
-apikeys = ['test']
-rdb = lucullus.resource.Pool(resource_path)
-rdb.install('Sequence', lucullus.plugins.seq.SequenceResource)
-rdb.install('Index', lucullus.plugins.base.IndexView)
-rdb.install('Ruler', lucullus.plugins.base.RulerView)
-rdb.install('Newick', lucullus.plugins.newick.NewickResource)
+cfg = dict()
+cfg['path.base'] = os.path.abspath(os.path.dirname(__file__))
+cfg['path.views'] = os.path.join(cfg['path.base'], 'views')
+cfg['path.db'] = os.path.join('/tmp')
+cfg['path.static'] = os.path.join(cfg['path.base'], 'static')
+cfg['api.strip'] = ''
+cfg['api.keys'] = []
+cfg['debug'] = False
 
+wsgi = bottle.Bottle()
+bottle.TEMPLATE_PATH.insert(0, cfg['path.views'])
+
+rdb = lucullus.resource.Pool(cfg['path.db'])
 
 err = dict()
 err['no key'] = 'You have to provide a valid api key'
@@ -36,6 +31,30 @@ err['no resource'] = 'The requested resource could not been found.'
 err['setup error'] = 'Resource setup failed'
 err['query error'] = 'Resource query failed'
 
+
+def config(**config):
+    for key in config:
+        if '_' in key:
+            config[key.replace('_','.')] = config[key]
+            del config[key]
+    cfg.update(config)
+    if 'path.db' in config:
+        rdb.savepath = cfg['path.db']
+        if not os.path.exists(rdb.savepath):
+            os.makedirs(rdb.savepath)
+        log.debug("Ressource path: %s", rdb.savepath)
+    if 'api.strip' in config:
+        wsgi.rootpath = cfg['api.strip']
+    if 'path.views' in config:
+        bottle.TEMPLATE_PATH.insert(0, cfg['path.views'])
+        log.debug("Template path: %s", bottle.TEMPLATE_PATH)
+
+def load_plugin(path):
+    rdb.install_module(path)
+
+def start(*a, **k):
+    log.info("Starting server: %s", repr((a, k)))
+    bottle.run(app=wsgi, *a, **k)
 
 def apierr(code, **args):
     args['error'] = code
@@ -48,7 +67,7 @@ def apierr(code, **args):
 def needs_apikey(func):
     def wrapper(*a, **ka):
         key = bottle.request.POST.get('apikey', None)
-        if key not in apikeys:
+        if key not in cfg['api.keys']:
             apierr('no key')
         del bottle.request.POST['apikey']
         return func(*a, **ka)
@@ -66,7 +85,7 @@ def needs_ressource(func):
     return wrapper
 
 
-@route('/api/create', method="POST")
+@wsgi.route('/api/create', method="POST")
 @needs_apikey
 def create():
     rdb.cleanup(60*60)
@@ -86,7 +105,7 @@ def create():
     return {"id": r.id, "state": r.getstate(), "methods": r.getapi()}
 
 
-@route('/api/r:rid#[0-9]+#/setup', method='POST')
+@wsgi.route('/api/r:rid#[0-9]+#/setup', method='POST')
 @needs_apikey
 @needs_ressource
 def setup(ressource):
@@ -99,7 +118,7 @@ def setup(ressource):
         return apierr('setup error', id=ressource.id, detail=e.args[0])
 
 
-@route('/api/r:rid#[0-9]+#/:query#[a-z_]+#', method='POST')
+@wsgi.route('/api/r:rid#[0-9]+#/:query#[a-z_]+#', method='POST')
 @needs_apikey
 @needs_ressource
 def query(ressource, query):
@@ -117,8 +136,8 @@ def query(ressource, query):
         return apierr('query error', **response)
 
 
-@route('/api/r:rid#[0-9]+#/help', method='GET')
-@route('/api/r:rid#[0-9]+#/help/:query#[a-z_]+#', method='GET')
+@wsgi.route('/api/r:rid#[0-9]+#/help', method='GET')
+@wsgi.route('/api/r:rid#[0-9]+#/help/:query#[a-z_]+#', method='GET')
 @needs_apikey
 @needs_ressource
 def help(ressource, query=None):
@@ -132,7 +151,7 @@ def help(ressource, query=None):
     return {'id': ressource.id, 'api':api.keys}
 
 
-@route('/api/r:rid#[0-9]+#')
+@wsgi.route('/api/r:rid#[0-9]+#')
 @needs_ressource
 def info(rid):
     r = rdb.fetch(int(rid),None)
@@ -141,7 +160,7 @@ def info(rid):
     return {"id": rid, "state": r.state()}
 
 
-@route('/api/r:rid#[0-9]+#/:channel#[a-z]+#-:x#[0-9]+#-:y#[0-9]+#-:w#[0-9]+#-:h#[0-9]+#.:format#png#')
+@wsgi.route('/api/r:rid#[0-9]+#/:channel#[a-z]+#-:x#[0-9]+#-:y#[0-9]+#-:w#[0-9]+#-:h#[0-9]+#.:format#png#')
 @bottle.validate(x=int, y=int, w=int, h=int)
 def render(rid, channel, x, y, w, h, format):
     ts = time.time()
@@ -161,7 +180,7 @@ def render(rid, channel, x, y, w, h, format):
     # Send cached file to client
     filename = '/tmp/lucullus/image_%s_%s_mtime%dx%dy%dw%dh%d.%s' % (rid,channel,int(r.mtime),x,y,w,h,format)
     ts2 = time.time()
-    if not os.path.exists(filename) or DEBUG:
+    if not os.path.exists(filename) or cfg['debug']:
         area = lucullus.render.geometry.Area(left=x, top=y, width=w, height=h)
         rc = lucullus.render.Target(area=area, format=format)
         try:
@@ -182,17 +201,17 @@ def render(rid, channel, x, y, w, h, format):
     return bottle.static_file(filename=os.path.basename(filename), root=os.path.dirname(filename), mimetype="image/%s" % format)
 
 
-@route('/')
+@wsgi.route('/')
 def index():
     return bottle.template('seqgui')
 
 
-@route('/:filename#(js|jquery|css|test)/.+#')
+@wsgi.route('/:filename#(img|js|jquery|css|test)/.+#')
 def static(filename):
-    return bottle.static_file(filename=filename, root=resource_path + '/static_files')
+    return bottle.static_file(filename=filename, root=cfg['path.static'])
 
 
-@route('/clean')
+@wsgi.route('/clean')
 def cleanup():
     rdb.cleanup(10)
     return "done"
