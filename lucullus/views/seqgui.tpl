@@ -10,6 +10,7 @@
 	<script src="./js/lucullus.js"	 type="text/javascript"></script>
 	<script src="./js/lucullus.seqgui.js"	type="text/javascript"></script>
 	<script src="./js/lucullus.ui.js"	type="text/javascript"></script>
+	<script src="./js/lucullus.gui.js"	type="text/javascript"></script>
 
 	<!-- <link type="text/css" href="./jquery/smoothness/jquery-ui-1.7.2.custom.css" rel="stylesheet" /> -->
 	<link type="text/css" href="./jquery/lightness/jquery-ui-1.7.2.custom.css" rel="stylesheet" />
@@ -17,8 +18,8 @@
 	<link type="text/css" href="./css/lucullus.css" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="js/ext/resources/css/ext-all.css" />
- 	<script type="text/javascript" src="js/ext/adapter/jquery/ext-jquery-adapter-debug.js"></script>
-    <script type="text/javascript" src="js/ext/ext-all-debug.js"></script>
+ 	<script type="text/javascript" src="js/ext/adapter/jquery/ext-jquery-adapter.js"></script>
+    <script type="text/javascript" src="js/ext/ext-all.js"></script>
 
 
 	<title>Lucullus bla</title>
@@ -121,39 +122,31 @@
 		 * http://www.extjs.com/license
 		 */
 		Ext.onReady(function(){
-
 		    var button = Ext.get('new_ext_window');
-
 		    button.on('click', function(){
-
-		        // tabs for the center
-		        var tabs = new Ext.TabPanel({
-		            region: 'center',
-		            margins:'3 3 3 0', 
-		            activeTab: 0,
-		            defaults:{autoScroll:true},
-		            items:[{
-		                title: 'Bogus Tab',
-		                html: 'Ext.example.bogusMarkup'
-		            },{
-		                title: 'Another Tab',
-		                html: 'Ext.example.bogusMarkup'
-		            },{
-		                title: 'Closable Tab',
-		                html: 'Ext.example.bogusMarkup',
-		                closable:true
-		            }]
-		        });
-
 		        // Panel for the west
-		        var nav = new Ext.Panel({
-		            title: 'Navigation',
+				var nav = new Ext.Toolbar()
+				nav.add({text:'test'})
+
+		        var idx = new Ext.Panel({
+		            title: 'Sequence Index',
 		            region: 'west',
 		            split: true,
 		            width: 200,
 		            collapsible: true,
-		            margins:'3 0 3 3',
-		            cmargins:'3 3 3 3'
+		            margins:'0 0 0 0',
+		            cmargins:'0 0 0 0'
+		        });
+
+		        // Panel for the west
+		        var dta = new Ext.Panel({
+		            title: 'Phylogenetic Tree Data',
+		            region: 'center',
+		            split: true,
+		            width: 400,
+		            collapsible: false,
+		            margins:'0 0 0 0',
+		            cmargins:'0 0 0 0'
 		        });
 
 		        var win = new Ext.Window({
@@ -163,12 +156,17 @@
 		            height:350,
 		            //border:false,
 		            plain:true,
-		            layout: 'border',
-
-		            items: [nav, tabs]
+					layout:'border',
+					defaults: {
+					    split: true,
+					    bodyStyle: 'padding:0px'
+					},
+					tbar: nav,
+					items: [idx, dta]
 		        });
-
 		        win.show(this);
+				$(dta.body.dom).html('...')
+
 		    });
 		});
 		</script>
