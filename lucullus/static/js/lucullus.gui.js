@@ -15,59 +15,59 @@ Lucullus.gui.NewickTreeWindow = function(options) {
     
     this.gui.toolbar = new Ext.Toolbar()
     this.gui.toolbar.add({
-      text: 'New',
-      icon: '/img/icons/16x16/actions/document-new.png',
-      menu: { items: [
-        {text: 'Open file',
-        handler: this.load,
-        scope: this,
-        icon: '/img/icons/16x16/actions/document-open.png'},
-        {text: 'Export',
-        handler: this.export,
-        scope: this,
-        disabled: true,
-        icon: '/img/icons/16x16/actions/document-save.png'},
-      ]}
+        text: 'New',
+        icon: '/img/icons/16x16/actions/document-new.png',
+        menu: { items: [
+            {text: 'Open file',
+            handler: this.load,
+            scope: this,
+            icon: '/img/icons/16x16/actions/document-open.png'},
+            {text: 'Export',
+            handler: this.export,
+            scope: this,
+            disabled: true,
+            icon: '/img/icons/16x16/actions/document-save.png'},
+        ]}
     })
     
     this.gui.tree = new Ext.Panel({
-      title: 'Phylogenetic Tree Data',
-          region: 'center',
-          split: true,
-          disabled: true,
-          width: 400,
-          collapsible: false,
-          margins:'0 0 0 0',
-          cmargins:'0 0 0 0'
-        });
-
-    this.gui.index = idx = new Ext.Panel({
-      title: 'Sequence Index',
-      region: 'west',
-      split: true,
-      disabled: true,
-      width: 200,
-      collapsible: true,
-      margins:'0 0 0 0',
-      cmargins:'0 0 0 0'
+        title: 'Phylogenetic Tree Data',
+        region: 'center',
+        split: true,
+        disabled: true,
+        width: 400,
+        collapsible: false,
+        margins:'0 0 0 0',
+        cmargins:'0 0 0 0'
     });
 
-        this.gui.win = new Ext.Window({
-      title: 'Newick Tree Viewer',
-          closable: true,
-          hidden: true,
-          width: 600,
-          height: 350,
-          //border:false,
-          plain: true,
-            layout: 'border',
-            defaults: {
-               split: true,
-               bodyStyle: 'padding:0px'
-            },
-            tbar: this.gui.toolbar,
-            items: [this.gui.index, this.gui.tree]
-        });
+    this.gui.index = idx = new Ext.Panel({
+        title: 'Sequence Index',
+        region: 'west',
+        split: true,
+        disabled: true,
+        width: 200,
+        collapsible: true,
+        margins:'0 0 0 0',
+        cmargins:'0 0 0 0'
+    });
+
+    this.gui.win = new Ext.Window({
+        title: 'Newick Tree Viewer',
+        closable: true,
+        hidden: true,
+        width: 600,
+        height: 350,
+        //border:false,
+        plain: true,
+        layout: 'border',
+        defaults: {
+            split: true,
+            bodyStyle: 'padding:0px'
+        },
+        tbar: this.gui.toolbar,
+        items: [this.gui.index, this.gui.tree]
+    });
 }
 
 Lucullus.gui.NewickTreeWindow.prototype.show = function() {
