@@ -2,7 +2,7 @@ import os, os.path
 import time
 import rfc822
 import bottle
-from bottle import HTTPResponse, HTTPError
+from bottle import HTTPResponse, HTTPError, route, validate
 import logging
 import lucullus.render
 import lucullus.render.geometry
@@ -19,7 +19,6 @@ cfg['api.strip'] = ''
 cfg['api.keys'] = []
 cfg['debug'] = False
 
-wsgi = bottle.Bottle()
 bottle.TEMPLATE_PATH.insert(0, cfg['path.views'])
 
 rdb = lucullus.resource.Pool(cfg['path.db'])
@@ -85,7 +84,7 @@ def needs_ressource(func):
     return wrapper
 
 
-@wsgi.route('/api/create', method="POST")
+@route('/api/create', method="POST")
 @needs_apikey
 def create():
     rdb.cleanup(60*60)
@@ -105,7 +104,7 @@ def create():
     return {"id": r.id, "state": r.getstate(), "methods": r.getapi()}
 
 
-@wsgi.route('/api/r:rid#[0-9]+#/setup', method='POST')
+@route('/api/r:rid#[0-9]+#/setup', method='POST')
 @needs_apikey
 @needs_ressource
 def setup(ressource):
@@ -118,7 +117,7 @@ def setup(ressource):
         return apierr('setup error', id=ressource.id, detail=e.args[0])
 
 
-@wsgi.route('/api/r:rid#[0-9]+#/:query#[a-z_]+#', method='POST')
+@route('/api/r:rid#[0-9]+#/:query#[a-z_]+#', method='POST')
 @needs_apikey
 @needs_ressource
 def query(ressource, query):
@@ -136,8 +135,8 @@ def query(ressource, query):
         return apierr('query error', **response)
 
 
-@wsgi.route('/api/r:rid#[0-9]+#/help', method='GET')
-@wsgi.route('/api/r:rid#[0-9]+#/help/:query#[a-z_]+#', method='GET')
+@route('/api/r:rid#[0-9]+#/help', method='GET')
+@route('/api/r:rid#[0-9]+#/help/:query#[a-z_]+#', method='GET')
 @needs_apikey
 @needs_ressource
 def help(ressource, query=None):
@@ -151,7 +150,7 @@ def help(ressource, query=None):
     return {'id': ressource.id, 'api':api.keys}
 
 
-@wsgi.route('/api/r:rid#[0-9]+#')
+@route('/api/r:rid#[0-9]+#')
 @needs_ressource
 def info(rid):
     r = rdb.fetch(int(rid),None)
@@ -160,8 +159,8 @@ def info(rid):
     return {"id": rid, "state": r.state()}
 
 
-@wsgi.route('/api/r:rid#[0-9]+#/:channel#[a-z]+#-:x#[0-9]+#-:y#[0-9]+#-:w#[0-9]+#-:h#[0-9]+#.:format#png#')
-@bottle.validate(x=int, y=int, w=int, h=int)
+@route('/api/r:rid#[0-9]+#/:channel#[a-z]+#-:x#[0-9]+#-:y#[0-9]+#-:w#[0-9]+#-:h#[0-9]+#.:format#png#')
+@validate(x=int, y=int, w=int, h=int)
 def render(rid, channel, x, y, w, h, format):
     ts = time.time()
     r = rdb.fetch(int(rid), None)
@@ -201,17 +200,17 @@ def render(rid, channel, x, y, w, h, format):
     return bottle.static_file(filename=os.path.basename(filename), root=os.path.dirname(filename), mimetype="image/%s" % format)
 
 
-@wsgi.route('/')
+@route('/')
 def index():
     return bottle.template('seqgui')
 
 
-@wsgi.route('/:filename#(img|js|jquery|css|test)/.+#')
+@route('/:filename#(img|js|jquery|css|test)/.+#')
 def static(filename):
     return bottle.static_file(filename=filename, root=cfg['path.static'])
 
 
-@wsgi.route('/clean')
+@route('/clean')
 def cleanup():
     rdb.cleanup(10)
     return "done"
