@@ -1,6 +1,55 @@
 Lucullus.gui = new Object()
 
-Lucullus.gui.NewickTreeWindow = function(options) {
+Lucullus.gui.AppWindow = function(options) {
+    /* This creates/opens a window holding multiple workspaces  */
+    this.gui = {}
+    this.apps = []
+
+    this.gui.root = new Ext.Window({
+        title: 'Lucullus Workspace',
+        closable: true,
+        hidden: true,
+        width: 600,
+        height: 350,
+        //border:false,
+        plain: true,
+        layout: 'fit',
+    });
+
+    /* Tab area */
+    this.gui.tabpanel = new Ext.TabPanel({
+        resizeTabs: true, // turn on tab resizing
+        minTabWidth: 115,
+        tabWidth: 135,
+        enableTabScroll: true, //<-- displays a scroll for the tabs
+        border: false
+    });
+
+    this.gui.root.add(this.gui.tabpanel)
+    this.gui.tabpanel.add({
+        title: 'Settings',
+        closable: false,
+        iconCls: 'icon-config',
+        html: 'foo',
+    })
+    this.gui.tabpanel.setActiveTab(0)
+}
+
+Lucullus.gui.AppWindow.prototype.show = function() {
+    if(this.gui.root.hidden) this.gui.root.show()
+}
+
+Lucullus.gui.AppWindow.prototype.addApp = function(app) {
+    this.gui.tabpanel.add(app.gui.root)
+    this.gui.tabpanel.activate(app.gui.root)
+    this.apps.push(app)
+}
+
+
+
+
+
+Lucullus.gui.NewickApp = function(options) {
     this.options = {
       api: Lucullus.current,
       fontsize: 10
@@ -10,27 +59,56 @@ Lucullus.gui.NewickTreeWindow = function(options) {
     this.api = this.options.api
     this.data = {}
     this.gui = {}
-    
+
     this.data.tree = this.api.create('NewickResource', {fontsize: this.options.fontsize})
-    
-    this.gui.toolbar = new Ext.Toolbar()
-    this.gui.toolbar.add({
+
+    this.gui.root = new Ext.Panel({
+        title: 'Newick App',
+        iconCls: 'icon-document',
+        closable: true,
+        layout: 'border',
+        border: false,
+        tbar: new Ext.Toolbar({border: false})
+    })
+
+    /* Toolbar area */
+
+    this.gui.toolbar = this.gui.root.getTopToolbar()
+
+    this.gui.tb_file = new Ext.Button({
         text: 'New',
         icon: '/img/icons/16x16/actions/document-new.png',
-        menu: { items: [
-            {text: 'Open file',
-            handler: this.load,
-            scope: this,
-            icon: '/img/icons/16x16/actions/document-open.png'},
-            {text: 'Export',
-            handler: this.export,
-            scope: this,
-            disabled: true,
-            icon: '/img/icons/16x16/actions/document-save.png'},
-        ]}
-    })
-    
-    this.gui.tree = new Ext.Panel({
+        menu: new Ext.menu.Menu()
+    });
+
+    this.gui.tb_file.menu.add({
+        text: 'Open file',
+        handler: this.load, scope: this,
+        icon: '/img/icons/16x16/actions/document-open.png'
+    });
+
+    this.gui.tb_file.menu.add({
+        text: 'Export',
+        handler: this.export, scope: this,
+        disabled: true,
+        icon: '/img/icons/16x16/actions/document-save.png'
+    });
+
+    this.gui.toolbar.add(this.gui.tb_file)
+
+    this.gui.root.add(new Ext.Panel({
+        title: 'Sequence Index',
+        border: false,
+        region: 'west',
+        split: true,
+        disabled: true,
+        width: 200,
+        collapsible: true,
+        margins:'0 0 0 0',
+        cmargins:'0 0 0 0'
+    }));
+
+    this.gui.root.add(new Ext.Panel({
         title: 'Phylogenetic Tree Data',
         region: 'center',
         split: true,
@@ -39,47 +117,18 @@ Lucullus.gui.NewickTreeWindow = function(options) {
         collapsible: false,
         margins:'0 0 0 0',
         cmargins:'0 0 0 0'
-    });
-
-    this.gui.index = idx = new Ext.Panel({
-        title: 'Sequence Index',
-        region: 'west',
-        split: true,
-        disabled: true,
-        width: 200,
-        collapsible: true,
-        margins:'0 0 0 0',
-        cmargins:'0 0 0 0'
-    });
-
-    this.gui.win = new Ext.Window({
-        title: 'Newick Tree Viewer',
-        closable: true,
-        hidden: true,
-        width: 600,
-        height: 350,
-        //border:false,
-        plain: true,
-        layout: 'border',
-        defaults: {
-            split: true,
-            bodyStyle: 'padding:0px'
-        },
-        tbar: this.gui.toolbar,
-        items: [this.gui.index, this.gui.tree]
-    });
+    }));
 }
 
-Lucullus.gui.NewickTreeWindow.prototype.show = function() {
-  var win = this.gui.win
-  if(!win.hidden) return this
-  this.gui.win.show()
+Lucullus.gui.NewickApp.prototype.load = function() {
+  this.gui.root.items.items[0].enable()
+  this.gui.root.items.items[1].enable()
 }
 
-Lucullus.gui.NewickTreeWindow.prototype.load = function() {
-  alert(5)
-  this.gui.win.hide()
-}
+
+
+
+
 
 
 
