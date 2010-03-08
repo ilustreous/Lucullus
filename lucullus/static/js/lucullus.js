@@ -4,7 +4,7 @@
 
 var Lucullus = new Object();
 
-
+Lucullus.current = null // Current connected API
 
 
 
@@ -154,7 +154,7 @@ Lucullus.Request.prototype.restart = function(newdata) {
  * @constructor
  */
 
-Lucullus.api = function (server, key) {
+Lucullus.api = function(server, key) {
     /** API location (url) http://www.example.com/seqmap/api 
      * @type string */
     this.server     = server
@@ -165,6 +165,7 @@ Lucullus.api = function (server, key) {
      * @type Dict */
     this.resources  = {}
     this.debug = function(msg){alert(msg)}
+    Lucullus.current = this
 }
 
 
