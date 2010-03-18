@@ -16,7 +16,7 @@ cfg['path.views'] = os.path.join(cfg['path.base'], 'views')
 cfg['path.db'] = os.path.join('/tmp')
 cfg['path.static'] = os.path.join(cfg['path.base'], 'static')
 cfg['api.strip'] = ''
-cfg['api.keys'] = []
+cfg['api.keys'] = ['test']
 cfg['debug'] = False
 
 bottle.TEMPLATE_PATH.insert(0, cfg['path.views'])
@@ -30,6 +30,7 @@ err['no resource'] = 'The requested resource could not been found.'
 err['setup error'] = 'Resource setup failed'
 err['query error'] = 'Resource query failed'
 
+bottle.app.push()
 
 def config(**config):
     for key in config:
@@ -92,7 +93,6 @@ def create():
     r_type = options.get('type', 'txt')
     if 'type' in options:
         del options['type']
-
     try:
         r = rdb.create(r_type)
         if options:
@@ -194,9 +194,9 @@ def render(rid, channel, x, y, w, h, format):
         except Exception, e:
             log.exception("Rendering failed!")
             raise
-    bottle.response.header['X-Copyright'] = "Max Planck Institut (MPIBPC Goettingen) Marcel Hellkamp"
-    bottle.response.header['X-CPUTIME'] = "render: %f all: %f" % (time.time() - ts2, time.time() - ts)
-    bottle.response.header['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
+    bottle.response.headers['X-Copyright'] = "Max Planck Institut (MPIBPC Goettingen) Marcel Hellkamp"
+    bottle.response.headers['X-CPUTIME'] = "render: %f all: %f" % (time.time() - ts2, time.time() - ts)
+    bottle.response.headers['Expires'] = rfc822.formatdate(time.time() + 60*60*24)
     return bottle.static_file(filename=os.path.basename(filename), root=os.path.dirname(filename), mimetype="image/%s" % format)
 
 
@@ -214,3 +214,5 @@ def static(filename):
 def cleanup():
     rdb.cleanup(10)
     return "done"
+
+wsgi = bottle.app.pop()

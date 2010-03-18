@@ -4,6 +4,7 @@ Lucullus.gui.AppWindow = function(options) {
     /* This creates/opens a window holding multiple workspaces  */
     this.gui = {}
     this.apps = []
+    var self = this
 
     this.gui.root = new Ext.Window({
         title: 'Lucullus Workspace',
@@ -14,64 +15,8 @@ Lucullus.gui.AppWindow = function(options) {
         //border:false,
         plain: true,
         layout: 'fit',
-    });
-
-    /* Tab area */
-    this.gui.tabpanel = new Ext.TabPanel({
-        resizeTabs: true, // turn on tab resizing
-        minTabWidth: 115,
-        tabWidth: 135,
-        enableTabScroll: true, //<-- displays a scroll for the tabs
-        border: false
-    });
-
-    this.gui.root.add(this.gui.tabpanel)
-    this.gui.tabpanel.add({
-        title: 'Settings',
-        closable: false,
-        iconCls: 'icon-config',
-        html: 'foo',
-    })
-    this.gui.tabpanel.setActiveTab(0)
-}
-
-Lucullus.gui.AppWindow.prototype.show = function() {
-    if(this.gui.root.hidden) this.gui.root.show()
-}
-
-Lucullus.gui.AppWindow.prototype.addApp = function(app) {
-    this.gui.tabpanel.add(app.gui.root)
-    this.gui.tabpanel.activate(app.gui.root)
-    this.apps.push(app)
-}
-
-
-
-
-
-Lucullus.gui.NewickApp = function(options) {
-    this.options = {
-      api: Lucullus.current,
-      fontsize: 10
-    }
-    jQuery.extend(this.options, options)
-
-    this.api = this.options.api
-    this.data = {}
-    this.gui = {}
-
-    this.data.tree = this.api.create('NewickResource', {fontsize: this.options.fontsize})
-
-    this.gui.root = new Ext.Panel({
-        title: 'Newick App',
-        iconCls: 'icon-document',
-        closable: true,
-        layout: 'border',
-        border: false,
         tbar: new Ext.Toolbar({border: false})
-    })
-
-    /* Toolbar area */
+    });
 
     this.gui.toolbar = this.gui.root.getTopToolbar()
 
@@ -83,20 +28,133 @@ Lucullus.gui.NewickApp = function(options) {
 
     this.gui.tb_file.menu.add({
         text: 'Open file',
-        handler: this.load, scope: this,
+        handler: this.do_load, scope: this,
         icon: '/img/icons/16x16/actions/document-open.png'
     });
 
     this.gui.tb_file.menu.add({
         text: 'Export',
-        handler: this.export, scope: this,
+        handler: this.do_export, scope: this,
         disabled: true,
         icon: '/img/icons/16x16/actions/document-save.png'
     });
 
     this.gui.toolbar.add(this.gui.tb_file)
+    this.gui.toolbar.add('-')
 
-    this.gui.root.add(new Ext.Panel({
+    /* Tab area */
+    this.gui.tabpanel = new Ext.TabPanel({
+        resizeTabs: true, // turn on tab resizing
+        minTabWidth: 115,
+        tabWidth: 135,
+        enableTabScroll: true, //<-- displays a scroll for the tabs
+        border: false,
+        listeners: {
+            beforetabchange: function(tabPanel, tab){self.on_beforetabchange(tab)},
+            tabchange: function(tabPanel, tab){self.on_tabchange(tab)}
+        }
+    });
+    this.gui.root.add(this.gui.tabpanel)
+
+    //this.gui.tabpanel.add({
+    //    title: 'Settings',
+    //    closable: false,
+    //    iconCls: 'icon-config',
+    //    html: 'foo',
+    //})
+    //this.gui.tabpanel.setActiveTab(0)
+}
+
+Lucullus.gui.AppWindow.prototype.on_beforetabchange = function() {
+    if(this.gui.tabpanel.getActiveTab()) {
+        var app = this.apps[this.gui.tabpanel.getActiveTab().getId()]
+        if(app.gui.toolbar_items) {
+            for(i=0; i < app.gui.toolbar_items.length; i++) {
+                app.gui.toolbar_items[i].hide()
+            }
+        }
+    }
+}
+
+Lucullus.gui.AppWindow.prototype.on_tabchange = function() {
+    if(this.gui.tabpanel.getActiveTab()) {
+        var app = this.apps[this.gui.tabpanel.getActiveTab().getId()]
+        if(app.gui.toolbar_items) {
+            for(i=0; i < app.gui.toolbar_items.length; i++) {
+                app.gui.toolbar_items[i].show()
+            }
+        }
+        this.gui.toolbar.doLayout()
+    }
+}
+
+Lucullus.gui.AppWindow.prototype.show = function() {
+    if(this.gui.root.hidden) this.gui.root.show()
+}
+
+Lucullus.gui.AppWindow.prototype.do_load = function() {
+    var self = this
+    new Lucullus.gui.ImportWindow({onsubmit:function(a,b,c){self.do_create(a,b,c)}});
+}
+
+Lucullus.gui.AppWindow.prototype.do_create = function(type, name, url) {
+    console.log(type, name, url)
+    if(type = 'Newick') {
+        if(url && name) {
+            var a = new Lucullus.gui.NewickApp({source:url})
+            a.gui.root.setTitle("Newick: "+name)
+            this.addApp(a)
+        }
+    }
+}
+
+Lucullus.gui.AppWindow.prototype.addApp = function(app) {
+    var id = app.gui.root.getId()
+    this.apps[id] = app // TODO: Was passiert bei doppelt eingefuegten apps?
+    this.gui.tabpanel.add(app.gui.root)
+    if(app.gui.toolbar_items) {
+        for(i=0; i < app.gui.toolbar_items.length; i++) {
+            this.gui.toolbar.add(app.gui.toolbar_items[i])
+        }
+    }
+    var self = this
+    this.gui.tabpanel.activate(app.gui.root)
+}
+
+
+
+
+
+
+Lucullus.gui.NewickApp = function(options) {
+    this.options = {
+      api: Lucullus.current,
+      fontsize: 10,
+      source: '/test/test.seq'
+    }
+    jQuery.extend(this.options, options)
+    var self = this
+    this.api = this.options.api
+    this.data = {}
+    this.gui = {}
+
+    this.gui.toolbar_items = [new Ext.Button({text: 'Button'})]
+
+    this.gui.root = new Ext.Panel({
+        title: 'Newick App',
+        iconCls: 'icon-document',
+        closable: true,
+        layout: 'border',
+        border: false,
+    })
+    
+    this.gui.root.on('activate', function(){
+        self.refresh()
+    })
+
+    /* Toolbar area */
+
+    this.gui.index_panel = new Ext.Panel({
         title: 'Sequence Index',
         border: false,
         region: 'west',
@@ -106,23 +164,53 @@ Lucullus.gui.NewickApp = function(options) {
         collapsible: true,
         margins:'0 0 0 0',
         cmargins:'0 0 0 0'
-    }));
+    })
+    this.gui.root.add(this.gui.index_panel);
 
-    this.gui.root.add(new Ext.Panel({
+    this.gui.map_panel = new Ext.Panel({
         title: 'Phylogenetic Tree Data',
         region: 'center',
         split: true,
-        disabled: true,
-        width: 400,
-        collapsible: false,
-        margins:'0 0 0 0',
-        cmargins:'0 0 0 0'
-    }));
+        disabled: false,
+        collapsible: false
+    })
+    this.gui.root.add(this.gui.map_panel);
+
+    this.data.tree = this.api.create('NewickResource', {fontsize: this.options.fontsize})
+    this.gui.map_panel.on('render', function(){
+        if(!self.gui.map) {
+            self.gui.map_view = new Lucullus.ViewMap(self.gui.map_panel.body.dom, self.data.tree)
+            self.ml.addMap(self.gui.map_view,1,1)
+            self.ml.addJoystick(self.gui.map_view.node,1,1)
+            self.refresh()
+        }
+    })
+    this.gui.map_panel.on('resize', function(){
+        self.refresh()
+    })
+    
+    this.data.tree.wait(function(){
+        var upreq = self.data.tree.load({'source':self.options.source})
+        upreq.wait(function(){
+            if(upreq.error) {
+                console.log("Upload failed: "+upreq.result.detail)
+            }
+            self.load()
+            self.refresh()
+        })
+    })
+    this.ml = new Lucullus.MoveListenerFactory()
+}
+
+Lucullus.gui.NewickApp.prototype.refresh = function() {
+    var h = this.gui.map_panel.body.getHeight(true)
+    var w = this.gui.map_panel.getWidth(true)
+    this.gui.map_view.resize(w, h)
 }
 
 Lucullus.gui.NewickApp.prototype.load = function() {
-  this.gui.root.items.items[0].enable()
-  this.gui.root.items.items[1].enable()
+    this.gui.root.items.items[0].enable()
+    this.gui.root.items.items[1].enable()
 }
 
 
@@ -134,40 +222,45 @@ Lucullus.gui.NewickApp.prototype.load = function() {
 
 
 Lucullus.gui.ImportWindow = function(options) {
-    this.options = {}
+    this.options = {onsubmit: console.log}
     jQuery.extend(this.options, options)
-    this.form = new Ext.form.FormPanel({
-        labelWidth: 55,
-        defaultType: 'textfield',
-        items: [{
-            fieldLabel: 'File URL',
-            name: 'upFile',
-            anchor:'100%'  // anchor width by percentage
-        }]
-    });
-
-    this.win = new Ext.Window({
-        title: 'File Import',
+    var self = this
+    this.gui = {}
+    this.gui.root = new Ext.Window({
+        title: 'Data Import Form',
         width: 500,
-        height: 300,
-        minWidth: 300,
-        minHeight: 200,
-        layout: 'fit',
+        layout: 'form',
+        autoHeight: true,
+        labelWidth: 100,
         plain: true,
-        bodyStyle: 'padding:5px;',
-        buttonAlign: 'center',
-        items: this.form,
-        buttons: [{text: 'Import'},{text: 'Cancel'}]
+        defaults: {
+            anchor: '95%',
+        },
+        items: [{
+            xtype: 'textfield',
+            fieldLabel: 'Name',
+            name: 'upload-name',
+        },{
+            xtype: 'textfield',
+            emptyText: 'http://',
+            fieldLabel: 'Data File',
+            name: 'upload-url',
+        }],
+        buttons: [{text: 'Import'},{text: 'Abort'}]
     });
 
-    this.win.show()
-    this.win.buttons[0].on("click", this.onClick, this)
+    this.gui.root.show()
+    this.gui.root.buttons[0].on("click", this.onClick, this)
+    this.gui.root.buttons[1].on("click", this.onAbort, this)
 }
 
 Lucullus.gui.ImportWindow.prototype.onClick = function() {
-    console.log(this.form.items.items[0].getValue())
+    var name = this.gui.root.items.items[0].getValue()
+    var url = this.gui.root.items.items[1].getValue()
+    this.options.onsubmit('Newick', name, url)
+    this.gui.root.destroy()
 }
 
 Lucullus.gui.ImportWindow.prototype.onAbort = function() {
-    this.win.destroy()
+    this.gui.root.destroy()
 }

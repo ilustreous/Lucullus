@@ -111,8 +111,6 @@
                 // Panel for the west
                 x = new Lucullus.gui.AppWindow()
                 x.show()
-                var y = new Lucullus.gui.NewickApp()
-                x.addApp(y)
             });
         });
         </script>
