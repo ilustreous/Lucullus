@@ -9,6 +9,7 @@ Lucullus.gui.AppWindow = function(options) {
     this.gui.root = new Ext.Window({
         title: 'Lucullus Workspace',
         closable: true,
+        maximizable: true,
         hidden: true,
         width: 600,
         height: 350,
@@ -27,8 +28,15 @@ Lucullus.gui.AppWindow = function(options) {
     });
 
     this.gui.tb_file.menu.add({
-        text: 'Open file',
+        text: 'Open URL...',
         handler: this.do_load, scope: this,
+        icon: '/img/icons/16x16/categories/applications-internet.png'
+    });
+
+    this.gui.tb_file.menu.add({
+        text: 'Open file...',
+        handler: this.do_load, scope: this,
+        disabled: true,
         icon: '/img/icons/16x16/actions/document-open.png'
     });
 
@@ -94,18 +102,15 @@ Lucullus.gui.AppWindow.prototype.show = function() {
 
 Lucullus.gui.AppWindow.prototype.do_load = function() {
     var self = this
-    new Lucullus.gui.ImportWindow({onsubmit:function(a,b,c){self.do_create(a,b,c)}});
-}
-
-Lucullus.gui.AppWindow.prototype.do_create = function(type, name, url) {
-    console.log(type, name, url)
-    if(type = 'Newick') {
-        if(url && name) {
-            var a = new Lucullus.gui.NewickApp({source:url})
-            a.gui.root.setTitle("Newick: "+name)
-            this.addApp(a)
+    new Lucullus.gui.ImportWindow({onsubmit:function(type, name, url){
+        if(type = 'Newick') {
+            if(url && name) {
+                var a = new Lucullus.gui.NewickApp({source:url})
+                a.gui.root.setTitle("Newick: " + name)
+                self.addApp(a)
+            }
         }
-    }
+    }});
 }
 
 Lucullus.gui.AppWindow.prototype.addApp = function(app) {
@@ -120,6 +125,86 @@ Lucullus.gui.AppWindow.prototype.addApp = function(app) {
     var self = this
     this.gui.tabpanel.activate(app.gui.root)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+Lucullus.gui.ImportWindow = function(options) {
+    this.options = {onsubmit: alert}
+    jQuery.extend(this.options, options)
+    var self = this
+    this.gui = {}
+    
+    this.gui.form = new Ext.FormPanel({
+        labelWidth: 100,
+        baseCls: 'x-plain',
+        defaults: {
+            anchor: '95%',
+        },
+        items: [{
+            xtype: 'radiogroup',
+            fieldLabel: 'Type',
+            items: [
+                {boxLabel: 'Sequence Alignment', name: 'type', inputValue: 'SeqApp', checked: true},
+                {boxLabel: 'Newick Tree', name: 'type', inputValue: 'NewickApp'},
+            ]
+        },{
+            xtype: 'textfield',
+            fieldLabel: 'Project Name',
+            name: 'name',
+        },{
+            xtype: 'textfield',
+            emptyText: 'http://',
+            fieldLabel: 'Data File',
+            name: 'url',
+        }],
+    });
+
+    this.gui.root = new Ext.Window({
+        title: 'Data Import Form',
+        modal: true,
+        width: 500,
+        minWidth: 300,
+        layout: 'fit',
+        plain: true,
+        buttonAlign: 'center',
+        items: this.gui.form,
+        buttons: [{text: 'Load'},{text: 'Cancel'}]
+    });
+
+    this.gui.root.show()
+    this.gui.root.buttons[0].on("click", this.onClick, this)
+    this.gui.root.buttons[1].on("click", this.onAbort, this)
+}
+
+Lucullus.gui.ImportWindow.prototype.onClick = function() {
+    var data = this.gui.form.getForm().getValues()
+    this.options.onsubmit(data.type, data.name, data.url)
+    this.gui.root.destroy()
+}
+
+Lucullus.gui.ImportWindow.prototype.onAbort = function() {
+    this.gui.root.destroy()
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -171,7 +256,7 @@ Lucullus.gui.NewickApp = function(options) {
         title: 'Phylogenetic Tree Data',
         region: 'center',
         split: true,
-        disabled: false,
+        disabled: true,
         collapsible: false
     })
     this.gui.root.add(this.gui.map_panel);
@@ -193,7 +278,7 @@ Lucullus.gui.NewickApp = function(options) {
         var upreq = self.data.tree.load({'source':self.options.source})
         upreq.wait(function(){
             if(upreq.error) {
-                console.log("Upload failed: "+upreq.result.detail)
+                alert("Upload failed: "+upreq.result.detail)
             }
             self.load()
             self.refresh()
@@ -221,46 +306,3 @@ Lucullus.gui.NewickApp.prototype.load = function() {
 
 
 
-Lucullus.gui.ImportWindow = function(options) {
-    this.options = {onsubmit: console.log}
-    jQuery.extend(this.options, options)
-    var self = this
-    this.gui = {}
-    this.gui.root = new Ext.Window({
-        title: 'Data Import Form',
-        width: 500,
-        layout: 'form',
-        autoHeight: true,
-        labelWidth: 100,
-        plain: true,
-        defaults: {
-            anchor: '95%',
-        },
-        items: [{
-            xtype: 'textfield',
-            fieldLabel: 'Name',
-            name: 'upload-name',
-        },{
-            xtype: 'textfield',
-            emptyText: 'http://',
-            fieldLabel: 'Data File',
-            name: 'upload-url',
-        }],
-        buttons: [{text: 'Import'},{text: 'Abort'}]
-    });
-
-    this.gui.root.show()
-    this.gui.root.buttons[0].on("click", this.onClick, this)
-    this.gui.root.buttons[1].on("click", this.onAbort, this)
-}
-
-Lucullus.gui.ImportWindow.prototype.onClick = function() {
-    var name = this.gui.root.items.items[0].getValue()
-    var url = this.gui.root.items.items[1].getValue()
-    this.options.onsubmit('Newick', name, url)
-    this.gui.root.destroy()
-}
-
-Lucullus.gui.ImportWindow.prototype.onAbort = function() {
-    this.gui.root.destroy()
-}
