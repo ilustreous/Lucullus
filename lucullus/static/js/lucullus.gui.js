@@ -53,14 +53,10 @@ Lucullus.gui.AppWindow = function(options) {
     /* Tab area */
     this.gui.tabpanel = new Ext.TabPanel({
         resizeTabs: true, // turn on tab resizing
-        minTabWidth: 115,
-        tabWidth: 135,
+        minTabWidth: 150,
+        tabWidth: 200,
         enableTabScroll: true, //<-- displays a scroll for the tabs
         border: false,
-        listeners: {
-            beforetabchange: function(tabPanel, tab){self.on_beforetabchange(tab)},
-            tabchange: function(tabPanel, tab){self.on_tabchange(tab)}
-        }
     });
     this.gui.root.add(this.gui.tabpanel)
 
@@ -73,29 +69,6 @@ Lucullus.gui.AppWindow = function(options) {
     //this.gui.tabpanel.setActiveTab(0)
 }
 
-Lucullus.gui.AppWindow.prototype.on_beforetabchange = function() {
-    if(this.gui.tabpanel.getActiveTab()) {
-        var app = this.apps[this.gui.tabpanel.getActiveTab().getId()]
-        if(app.gui.toolbar_items) {
-            for(i=0; i < app.gui.toolbar_items.length; i++) {
-                app.gui.toolbar_items[i].hide()
-            }
-        }
-    }
-}
-
-Lucullus.gui.AppWindow.prototype.on_tabchange = function() {
-    if(this.gui.tabpanel.getActiveTab()) {
-        var app = this.apps[this.gui.tabpanel.getActiveTab().getId()]
-        if(app.gui.toolbar_items) {
-            for(i=0; i < app.gui.toolbar_items.length; i++) {
-                app.gui.toolbar_items[i].show()
-            }
-        }
-        this.gui.toolbar.doLayout()
-    }
-}
-
 Lucullus.gui.AppWindow.prototype.show = function() {
     if(this.gui.root.hidden) this.gui.root.show()
 }
@@ -105,8 +78,7 @@ Lucullus.gui.AppWindow.prototype.do_load = function() {
     new Lucullus.gui.ImportWindow({onsubmit:function(type, name, url){
         if(type = 'Newick') {
             if(url && name) {
-                var a = new Lucullus.gui.NewickApp({source:url})
-                a.gui.root.setTitle("Newick: " + name)
+                var a = new Lucullus.gui.NewickApp({name: name, source:url})
                 self.addApp(a)
             }
         }
@@ -117,15 +89,42 @@ Lucullus.gui.AppWindow.prototype.addApp = function(app) {
     var id = app.gui.root.getId()
     this.apps[id] = app // TODO: Was passiert bei doppelt eingefuegten apps?
     this.gui.tabpanel.add(app.gui.root)
+
     if(app.gui.toolbar_items) {
         for(i=0; i < app.gui.toolbar_items.length; i++) {
             this.gui.toolbar.add(app.gui.toolbar_items[i])
         }
     }
-    var self = this
+
+    app.gui.root.on('activate', function(){
+        if(app.gui.toolbar_items) {
+            for(i=0; i < app.gui.toolbar_items.length; i++) {
+                app.gui.toolbar_items[i].show()
+            }
+        }
+        this.gui.toolbar.doLayout()
+    }, this)
+
+    app.gui.root.on('deactivate', function(){
+        if(app.gui.toolbar_items) {
+            for(i=0; i < app.gui.toolbar_items.length; i++) {
+                app.gui.toolbar_items[i].hide()
+            }
+        }
+        this.gui.toolbar.doLayout()
+    }, this)
+
+    app.gui.root.on('close', function(){
+        if(app.gui.toolbar_items) {
+            for(i=0; i < app.gui.toolbar_items.length; i++) {
+                app.gui.toolbar_items[i].hide()
+            }
+        }
+        this.gui.toolbar.doLayout()
+    }, this)
+
     this.gui.tabpanel.activate(app.gui.root)
 }
-
 
 
 
@@ -229,7 +228,8 @@ Lucullus.gui.NewickApp = function(options) {
     this.options = {
       api: Lucullus.current,
       fontsize: 10,
-      source: '/test/test.seq'
+      source: '/test/test.seq',
+      name: 'Unnamed Tree'
     }
     jQuery.extend(this.options, options)
     var self = this
@@ -237,10 +237,10 @@ Lucullus.gui.NewickApp = function(options) {
     this.data = {}
     this.gui = {}
 
-    this.gui.toolbar_items = [new Ext.Button({text: 'Button'})]
+    this.gui.toolbar_items = [new Ext.Button({text: this.options.name})]
 
     this.gui.root = new Ext.Panel({
-        title: 'Newick App',
+        title: self.options.name + " (Newick Tree)",
         iconCls: 'icon-document',
         closable: true,
         layout: 'border',
@@ -250,6 +250,13 @@ Lucullus.gui.NewickApp = function(options) {
     this.gui.root.on('activate', function(){
         self.refresh()
     })
+    this.gui.root.on('destroy', function(){
+        for ( var i in this.gui.toolbar_items ) {
+            if(this.gui.toolbar_items[i].destroy)
+                this.gui.toolbar_items[i].destroy();
+        }
+    }, this)
+
 
     /* Toolbar area */
 
@@ -271,7 +278,8 @@ Lucullus.gui.NewickApp = function(options) {
         region: 'center',
         split: true,
         disabled: true,
-        collapsible: false
+        collapsible: false,
+        border: false
     })
     this.gui.root.add(this.gui.map_panel);
 
@@ -295,6 +303,7 @@ Lucullus.gui.NewickApp = function(options) {
         upreq.wait(function(){
             if(upreq.error) {
                 alert("Upload failed: "+upreq.result.detail)
+                self.close()
             }
             self.load()
             self.refresh()
@@ -307,6 +316,10 @@ Lucullus.gui.NewickApp.prototype.refresh = function() {
     var h = this.gui.map_panel.body.getHeight(true)
     var w = this.gui.map_panel.getWidth(true)
     this.gui.map_view.resize(w, h)
+}
+
+Lucullus.gui.NewickApp.prototype.close = function() {
+    this.gui.root.destroy()
 }
 
 Lucullus.gui.NewickApp.prototype.load = function() {
