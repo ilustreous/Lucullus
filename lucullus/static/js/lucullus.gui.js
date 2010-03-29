@@ -121,6 +121,7 @@ Lucullus.gui.AppWindow.prototype.addApp = function(app) {
             }
         }
         this.gui.toolbar.doLayout()
+        this.apps.remove[id]
     }, this)
 
     this.gui.tabpanel.activate(app.gui.root)
@@ -304,6 +305,7 @@ Lucullus.gui.NewickApp = function(options) {
             if(upreq.error) {
                 alert("Upload failed: "+upreq.result.detail)
                 self.close()
+                return
             }
             self.load()
             self.refresh()
