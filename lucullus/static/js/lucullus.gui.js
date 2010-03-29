@@ -153,8 +153,10 @@ Lucullus.gui.ImportWindow = function(options) {
             xtype: 'radiogroup',
             fieldLabel: 'Type',
             items: [
-                {boxLabel: 'Sequence Alignment', name: 'type', inputValue: 'SeqApp', checked: true},
-                {boxLabel: 'Newick Tree', name: 'type', inputValue: 'NewickApp'},
+                {boxLabel: 'Sequence Alignment', name: 'type',
+                 inputValue: 'SeqApp', checked: true},
+                {boxLabel: 'Newick Tree', name: 'type',
+                 inputValue: 'NewickApp'},
             ]
         },{
             xtype: 'textfield',
@@ -162,7 +164,7 @@ Lucullus.gui.ImportWindow = function(options) {
             name: 'name',
         },{
             xtype: 'textfield',
-            emptyText: 'http://',
+            value: 'http://',
             fieldLabel: 'Data File',
             name: 'url',
         }],
@@ -175,20 +177,32 @@ Lucullus.gui.ImportWindow = function(options) {
         minWidth: 300,
         layout: 'fit',
         plain: true,
-        buttonAlign: 'center',
         items: this.gui.form,
-        buttons: [{text: 'Load'},{text: 'Cancel'}]
+        buttonAlign: 'center',
+        buttons: [{text: 'Load'}, {text: 'Cancel'}]
     });
 
     this.gui.root.show()
     this.gui.root.buttons[0].on("click", this.onClick, this)
     this.gui.root.buttons[1].on("click", this.onAbort, this)
+
+    /* This hack allows submitting the form with enter key. It works by adding
+       an invisible submit button to the form and catch its click event.
+    */
+    var enter_hack = this.gui.form.getForm().el.createChild({
+        tag: 'input',
+        type: 'submit',
+        style: { position: 'absolute', top: '-10000px', left: '-10000px' },
+        tabIndex: -1 // Exclude this button from tab-focus
+    });
+    enter_hack.on("click", this.onClick, this);
 }
 
 Lucullus.gui.ImportWindow.prototype.onClick = function() {
     var data = this.gui.form.getForm().getValues()
     this.options.onsubmit(data.type, data.name, data.url)
     this.gui.root.destroy()
+    return false
 }
 
 Lucullus.gui.ImportWindow.prototype.onAbort = function() {
@@ -264,7 +278,9 @@ Lucullus.gui.NewickApp = function(options) {
     this.data.tree = this.api.create('NewickResource', {fontsize: this.options.fontsize})
     this.gui.map_panel.on('render', function(){
         if(!self.gui.map) {
-            self.gui.map_view = new Lucullus.ViewMap(self.gui.map_panel.body.dom, self.data.tree)
+            self.gui.map_view = new Lucullus.ViewMap(
+                          self.gui.map_panel.body.dom,
+                          self.data.tree)
             self.ml.addMap(self.gui.map_view,1,1)
             self.ml.addJoystick(self.gui.map_view.node,1,1)
             self.refresh()
