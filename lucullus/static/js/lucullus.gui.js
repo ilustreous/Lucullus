@@ -34,6 +34,17 @@ Lucullus.gui.AppWindow = function(options) {
     });
 
     this.gui.tb_file.menu.add({
+        text: 'Load test file',
+        handler: function(){
+            var a = new Lucullus.gui.NewickApp({
+                name: 'TestApp', source:'http://fab8:8080/test/test.phb'
+            })
+            self.addApp(a)
+        },
+        icon: '/img/icons/16x16/categories/applications-internet.png'
+    });
+
+    this.gui.tb_file.menu.add({
         text: 'Open file...',
         handler: this.do_load, scope: this,
         disabled: true,
@@ -249,7 +260,7 @@ Lucullus.gui.NewickApp = function(options) {
     })
     
     this.gui.root.on('activate', function(){
-        self.refresh()
+        self.sync_size()
     })
     this.gui.root.on('destroy', function(){
         for ( var i in this.gui.toolbar_items ) {
@@ -284,49 +295,86 @@ Lucullus.gui.NewickApp = function(options) {
     })
     this.gui.root.add(this.gui.map_panel);
 
-    this.data.tree = this.api.create('NewickResource', {fontsize: this.options.fontsize})
+    // Create data structures client and server side
+    this.data.tree = this.api.create('NewickResource', {
+        fontsize: this.options.fontsize
+    })
+    this.data.index = this.api.create('IndexView', {
+        fontsize: this.options.fontsize
+    })
+
+    // Create a mouse-event hub to syncronize the different panels
+    this.ml = new Lucullus.MoveListenerFactory()
+
+    // Create ViewMaps as soon as the map and index panel doms are available
     this.gui.map_panel.on('render', function(){
-        if(!self.gui.map) {
+        if(!self.gui.map_view) {
             self.gui.map_view = new Lucullus.ViewMap(
                           self.gui.map_panel.body.dom,
                           self.data.tree)
+            // The whole map is a mouse control
             self.ml.addMap(self.gui.map_view,1,1)
-            self.ml.addJoystick(self.gui.map_view.node,1,1)
-            self.refresh()
+            self.ml.addLinear(self.gui.map_view.node,1,1)
         }
     })
-    this.gui.map_panel.on('resize', function(){
-        self.refresh()
+
+    this.gui.index_panel.on('render', function(){
+        if(!self.gui.index_view) {
+            self.gui.index_view = new Lucullus.ViewMap(
+                          self.gui.index_panel.body.dom,
+                          self.data.index)
+            // The whole index map is a mouse control, but limited to the y axis
+            self.ml.addMap(self.gui.index_view, 0, 1)
+            self.ml.addJoystick(self.gui.index_view.node, 0, 1)
+        }
     })
-    
+
+    // Resize the ViewMaps along wih the panel 
+    this.gui.map_panel.on('resize', this.sync_size, this)
+    this.gui.index_panel.on('resize', this.sync_size, this)
+    this.gui.map_panel.on('enable', this.sync_size, this)
+    this.gui.index_panel.on('enable', this.sync_size, this)
+
+    // As soon as the initialisation finishes, configure the index map
     this.data.tree.wait(function(){
         var upreq = self.data.tree.load({'source':self.options.source})
         upreq.wait(function(){
-            if(upreq.error) {
-                alert("Upload failed: "+upreq.result.detail)
-                self.close()
-                return
-            }
-            self.load()
-            self.refresh()
+            self.data.index.wait(function(){
+                if(upreq.error) {
+                    alert("Upload failed: " + upreq.result.detail)
+                    self.close()
+                    return
+                }
+                if(upreq.result.keys) {
+                    self.gui.root.items.items[1].enable()
+                    self.data.index.setup({
+                        'keys': upreq.result.keys
+                    }).wait(function(){
+                        self.gui.root.items.items[0].enable()
+                        self.sync_size()
+                    })
+                }
+            })
         })
     })
-    this.ml = new Lucullus.MoveListenerFactory()
 }
 
-Lucullus.gui.NewickApp.prototype.refresh = function() {
-    var h = this.gui.map_panel.body.getHeight(true)
-    var w = this.gui.map_panel.getWidth(true)
-    this.gui.map_view.resize(w, h)
+Lucullus.gui.NewickApp.prototype.sync_size = function() {
+    console.log(this)
+    if(this.gui.map_view) {
+        var h = this.gui.map_panel.body.getHeight(true)
+        var w = this.gui.map_panel.getWidth(true)
+        this.gui.map_view.resize(w, h)
+    }
+    if(this.gui.index_view) {
+        var h = this.gui.index_panel.body.getHeight(true)
+        var w = this.gui.index_panel.getWidth(true)
+        this.gui.index_view.resize(w, h)
+    }
 }
 
 Lucullus.gui.NewickApp.prototype.close = function() {
     this.gui.root.destroy()
-}
-
-Lucullus.gui.NewickApp.prototype.load = function() {
-    this.gui.root.items.items[0].enable()
-    this.gui.root.items.items[1].enable()
 }
 
 

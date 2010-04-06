@@ -89,7 +89,10 @@ def needs_ressource(func):
 @needs_apikey
 def create():
     rdb.cleanup(60*60)
-    options = dict(bottle.request.POST)
+    options = dict(bottle.request.POST.dict)
+    for key in options:
+        if len(options[key]) == 1:
+            options[key] = options[key][0]
     r_type = options.get('type', 'txt')
     if 'type' in options:
         del options['type']
@@ -109,7 +112,10 @@ def create():
 @needs_ressource
 def setup(ressource):
     """ Accesses the resource configuration and functions """
-    options = dict(bottle.request.POST)
+    options = dict(bottle.request.POST.dict)
+    for key in options:
+        if len(options[key]) == 1:
+            options[key] = options[key][0]
     try:
         ressource.setup(**options)
         return {"id": ressource.id, "state": ressource.getstate()}
@@ -122,7 +128,10 @@ def setup(ressource):
 @needs_ressource
 def query(ressource, query):
     """ Accesses the resource configuration and functions """
-    options = dict(bottle.request.POST)
+    options = dict(bottle.request.POST.dict)
+    for key in options:
+        if len(options[key]) == 1:
+            options[key] = options[key][0]
     response = dict(id=ressource.id)
     response['request'] = query
     response['options'] = options

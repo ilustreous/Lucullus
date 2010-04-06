@@ -320,7 +320,7 @@ class NewickResource(BaseView):
 		self.nodes = len(self.tree.leafs())
 		self.api_layout('center')
 		self.touch()
-		return {"nodes":self.nodes}
+		return {"keys": [leaf.label for leaf in self.tree.leafs()]}
 
 	def api_layout(self, name='center'):
 		if not self.tree:
@@ -332,7 +332,7 @@ class NewickResource(BaseView):
   
 		minstep = min([n[2] for n in self.vnodes if n[2] > 0]) # TODO excepton on empty tree
 		self.scalex = 1.0 / minstep * self.scale
-		self.scaley = self.fontsize * 1.25 # 1.25 = SPACING
+		self.scaley = self.fontsize# * 1.25 # 1.25 = SPACING
 		self.vsize = (0, 0)
 
 		# Calculate image size using font_extends() data in a test surface
