@@ -297,7 +297,7 @@ Lucullus.gui.NewickApp = function(options) {
         border: false,
         height: 25
     })
-    this.gui.root.add(this.gui.ruler_panel);
+    //this.gui.root.add(this.gui.ruler_panel);
 
 
     // Create data structures client and server side
