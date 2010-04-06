@@ -7,13 +7,14 @@ import logging
 import lucullus.render
 import lucullus.render.geometry
 import lucullus.resource
+import tempfile
 
 log = logging.getLogger("lucullus")
 
 cfg = dict()
 cfg['path.base'] = os.path.abspath(os.path.dirname(__file__))
 cfg['path.views'] = os.path.join(cfg['path.base'], 'views')
-cfg['path.db'] = os.path.join('/tmp')
+cfg['path.db'] = tempfile.mkdtemp(prefix='lucullus')
 cfg['path.static'] = os.path.join(cfg['path.base'], 'static')
 cfg['api.strip'] = ''
 cfg['api.keys'] = ['test']
@@ -39,9 +40,9 @@ def config(**config):
             del config[key]
     cfg.update(config)
     if 'path.db' in config:
+        if not os.path.exists(cfg['path.db']):
+            os.makedirs(cfg['path.db'])
         rdb.savepath = cfg['path.db']
-        if not os.path.exists(rdb.savepath):
-            os.makedirs(rdb.savepath)
         log.debug("Ressource path: %s", rdb.savepath)
     if 'api.strip' in config:
         wsgi.rootpath = cfg['api.strip']

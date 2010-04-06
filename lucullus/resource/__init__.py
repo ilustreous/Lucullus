@@ -49,7 +49,7 @@ class Pool(object):
         ''' Create a new resource '''
         if plugin not in self.plugins:
             raise ResourceTypeNotFound('Plugin %s not available' % plugin)
-        r = self.plugins[plugin](pool=self)
+        r = self.plugins[plugin]()
         rid = id(r)
         while rid in self.db or os.path.exists(os.path.join(self.savepath, "%d.res" % rid)): 
             rid += 1
@@ -110,10 +110,9 @@ class Pool(object):
 
 class BaseResource(object):
     """ An empty cache-, pick- and saveable data container bound to a session. """
-    def __init__(self, pool):
+    def __init__(self):
         self.mtime = time.time()
         self.atime = time.time()
-        self.resource_pool = pool
         self.prepare()
         self.id = -1
 

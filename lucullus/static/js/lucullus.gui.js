@@ -273,27 +273,32 @@ Lucullus.gui.NewickApp = function(options) {
     /* Toolbar area */
 
     this.gui.index_panel = new Ext.Panel({
-        title: 'Sequence Index',
+        //title: 'Index',
         border: false,
         region: 'west',
         split: true,
         disabled: true,
-        width: 200,
-        collapsible: true,
-        margins:'0 0 0 0',
-        cmargins:'0 0 0 0'
+        width: 100,
     })
     this.gui.root.add(this.gui.index_panel);
 
     this.gui.map_panel = new Ext.Panel({
-        title: 'Phylogenetic Tree Data',
+        //title: 'Phylogenetic Tree',
         region: 'center',
-        split: true,
         disabled: true,
-        collapsible: false,
         border: false
     })
     this.gui.root.add(this.gui.map_panel);
+
+    this.gui.ruler_panel = new Ext.Panel({
+        //title: 'Phylogenetic Tree',
+        region: 'north',
+        collapsible: false,
+        border: false,
+        height: 25
+    })
+    this.gui.root.add(this.gui.ruler_panel);
+
 
     // Create data structures client and server side
     this.data.tree = this.api.create('NewickResource', {
@@ -340,27 +345,27 @@ Lucullus.gui.NewickApp = function(options) {
         var upreq = self.data.tree.load({'source':self.options.source})
         upreq.wait(function(){
             self.data.index.wait(function(){
-                if(upreq.error) {
-                    alert("Upload failed: " + upreq.result.detail)
-                    self.close()
-                    return
-                }
                 if(upreq.result.keys) {
                     self.gui.root.items.items[1].enable()
+                    self.sync_size()
                     self.data.index.setup({
                         'keys': upreq.result.keys
                     }).wait(function(){
                         self.gui.root.items.items[0].enable()
                         self.sync_size()
                     })
+                    return
                 }
+                if(upreq.error) {
+                    alert("Upload failed: " + upreq.result.detail)
+                }
+                self.close()
             })
         })
     })
 }
 
 Lucullus.gui.NewickApp.prototype.sync_size = function() {
-    console.log(this)
     if(this.gui.map_view) {
         var h = this.gui.map_panel.body.getHeight(true)
         var w = this.gui.map_panel.getWidth(true)
