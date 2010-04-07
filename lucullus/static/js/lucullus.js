@@ -1,23 +1,31 @@
 /**
- * Lucullus Namespace
+ * Lucullus core utilities
  */
 
 var Lucullus = new Object();
 
-Lucullus.current = null // Current connected API
+
+// Current connected API
+Lucullus.current = null
+
+// Default server for API objects
+Lucullus.default_server = location.protocol + '//' + location.host + '/api'
+
+
 
 
 
 
 /**
- * Request class
- * Used for delayed execution of callback functions on ajax requests.
- * Understands Lucullus API 1.0 error responses
- * @class Request
+ * Trigger class
+ * Used for delayed execution of callback functions.
+ * @class Trigger
  * @constructor
  */
 
 Lucullus.Trigger = function() {
+    if (!(this instanceof arguments.callee))
+        throw new Error("Constructor called as a function");
     /** List of bound callbacks 
      * @type Array */
     this.callbacks = Array()
@@ -25,12 +33,12 @@ Lucullus.Trigger = function() {
     this.result = null
     /** Error object after calling self.abort(error) */
     this.error = null
-    this.aborted = false
+    this.stopped = false
 }
 
 /** Bind new callbacks.
- * Each callback is called once with the trigger object as its first argument as soon as possible.
- * You can recover from errors with t.finish(). All remaining callbacks will see a finished trigger 
+ * Each callback is called once with the trigger object as its first argument as
+ * soon as possible. You can pass any number of callbacks as arguments.
  */
 
 Lucullus.Trigger.prototype.wait = function() {
@@ -41,7 +49,7 @@ Lucullus.Trigger.prototype.wait = function() {
         }
     })
     if(this.result) {
-        while(this.callbacks.length && !this.aborted) {
+        while(this.callbacks.length && !this.stopped) {
             var c = this.callbacks.shift()
             c(this)
         }
@@ -49,28 +57,31 @@ Lucullus.Trigger.prototype.wait = function() {
     return this
 }
 
-/** Recover from an error
- * @param newdata overwrite result object from error response **/
+/** Mark the trigger as successfully finished
+ * @param result Result object. **/
 Lucullus.Trigger.prototype.success = function(result) {
     this.result = result
     this.error = null
+    this.stopped = false
     this.wait()
     return this
 }
 
-/** Recover from an error
- * @param newdata overwrite result object from error response **/
+/** Mark the trigger as failed
+ * @param error Error information.
+ * @param result Result object. **/
 Lucullus.Trigger.prototype.fail = function(error, result) {
     this.result = result ? result : null
     this.error = error ? error : true
+    this.stopped = false
     this.wait()
     return this
 }
 
 
-/** Abort execution of other callbacks **/
+/** Abort execution of further callbacks **/
 Lucullus.Trigger.prototype.abort = function() {
-    this.aborted = true
+    this.stopped = true
     return this
 }
 
@@ -79,11 +90,8 @@ Lucullus.Trigger.prototype.abort = function() {
 Lucullus.Trigger.prototype.recover = function(newdata) {
     if(!newdata)
         newdata = this.result
-    this.aborted = false
     return this.success(newdata)
 }
-
-
 
 
 
@@ -149,66 +157,6 @@ Lucullus.Request.prototype.restart = function(newdata) {
 
 
 /**
- * API Object
- * @class Server API (evend based asyc execution)
- * @constructor
- */
-
-Lucullus.api = function(server, key) {
-    /** API location (url) http://www.example.com/seqmap/api 
-     * @type string */
-    this.server     = server
-    /** API key 
-     * @type string */
-    this.key        = key
-    /** List of known resources 
-     * @type Dict */
-    this.resources  = {}
-    this.debug = function(msg){alert(msg)}
-    Lucullus.current = this
-}
-
-
-/**
- * Calls an API method of a Lucullus Server
- * @param {string} Name of the API method
- * @param {string} Data to provide
- * @param {function} Callback
- * @return Lucutus.call object with $this attached to $call.api
- */
-
-Lucullus.api.prototype.query = function(action, options, delayed) {
-    var url = this.server + '/' + action
-    if(options)
-        options['apikey'] = this.key
-    var request = new Lucullus.Request(url, options, delayed)
-    request.api = api
-    return request
-}
-
-/**
- * Creates a new Resource and returns a resource object equipped with
- * available api methods.
- * @param {string} type Type of the resource (one of api.plugins)
- * @param {function} Callback
- * @return Lucullus.Resource object
- */
-Lucullus.api.prototype.create = function(type, options) {
-    var resource = new Lucullus.Resource(this, type, options)
-    var self = this
-    resource.wait(function(response) {
-        self.resources[resource.id] = resource
-    })
-    return resource
-}
-
-
-
-
-
-
-
-/**
  * Creates a server resource of a specific type.
  * @param {Lucullus.Api} api Session to use
  * @param {string} type Name of the resource classto create
@@ -249,7 +197,7 @@ Lucullus.Resource = function(api, type, options) {
                 });
             }
         } else {
-            self.api.debug("Could not create resource type" + self.type)
+            self.api.debug("Could not create resource type:" + self.type)
             self.error_at = 0
             response.abort()
         }
@@ -369,9 +317,71 @@ Lucullus.Resource.prototype.error = function() {
         return this.queue[this.error_at]
 }
 
-
+/**
+ * A function to create a tile image URL for a visual (view resource)
+ **/
 Lucullus.Resource.prototype.imgurl = function(channel, x, y, width, height, format) {
-    return this.api.server + '/r' + this.id + '/default-'+x+'-'+y+'-'+width+'-'+height+'.'+format+'?mtime=' + self.mtime
+    if(!channel) var channel = 'default';
+    return this.api.server + '/r' + this.id + '/'+channel+'-'+x+'-'+y+'-'+width+'-'+height+'.'+format+'?mtime=' + self.mtime
+}
+
+
+
+
+
+
+/**
+ * API Object
+ * @class Server API (evend based asyc execution)
+ * @constructor
+ */
+
+Lucullus.api = function(server, key) {
+    /** API location (url) http://www.example.com/api 
+     * @type string */
+    this.server     = server
+    /** API key 
+     * @type string */
+    this.key        = key
+    /** List of known resources 
+     * @type Dict */
+    this.resources  = {}
+    this.debug = function(msg){alert(msg)}
+    Lucullus.current = this
+}
+
+
+/**
+ * Calls an API method of a Lucullus Server
+ * @param {string} Name of the API method
+ * @param {string} Data to provide
+ * @param {function} Callback
+ * @return Lucutus.Request object with api attached to Request.api
+ */
+
+Lucullus.api.prototype.query = function(action, options, delayed) {
+    var url = this.server + '/' + action
+    if(options)
+        options['apikey'] = this.key
+    var request = new Lucullus.Request(url, options, delayed)
+    request.api = api
+    return request
+}
+
+/**
+ * Creates a new Resource and returns a resource object equipped with
+ * available api methods.
+ * @param {string} type Type of the resource (one of api.plugins)
+ * @param {function} Callback
+ * @return Lucullus.Resource object
+ */
+Lucullus.api.prototype.create = function(type, options) {
+    var resource = new Lucullus.Resource(this, type, options)
+    var self = this
+    resource.wait(function(response) {
+        self.resources[resource.id] = resource
+    })
+    return resource
 }
 
 
@@ -411,13 +421,9 @@ Lucullus.Resource.prototype.imgurl = function(channel, x, y, width, height, form
 
 
 
-
-
-
-
-
-
-
+/**
+ * Widget to view and control a huge tiled image within a small div.
+ */
 
 Lucullus.ViewMap = function (root, view) {
     var self = this
@@ -428,7 +434,7 @@ Lucullus.ViewMap = function (root, view) {
 
     /* Default values */
     this.clipping = [0,0,0,0]           // minimum and maximum pixel to show
-    this.manclipp = [-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE]          // minimum and maximum pixel as set by user
+    this.manclipp = [-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE] // minimum and maximum pixel as set by user
     this.tilesize = [256,256]           // Size of a tile in pixel
     this.tiles    = [0,0]               // Number of tiles
     this.offset   = [0,0]               // Current offset (negative position of the upper left corner relative to the data area)

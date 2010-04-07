@@ -37,7 +37,7 @@ Lucullus.gui.AppWindow = function(options) {
         text: 'Load test file',
         handler: function(){
             var a = new Lucullus.gui.NewickApp({
-                name: 'TestApp', source:'http://fab8:8080/test/test.phb'
+                name: 'TestApp', source:location.href + 'test/test.phb'
             })
             self.addApp(a)
         },
